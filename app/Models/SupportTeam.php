@@ -17,7 +17,7 @@ class SupportTeam extends Authenticatable
         'phone_number',
         'email',
         'password',
-        'specialty',
+        'ticket_category_id',
         'available',
         'profile_picture',
         'max_ticket_capacity',
@@ -39,6 +39,7 @@ class SupportTeam extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'available' => 'boolean',
         ];
     }
 
@@ -46,8 +47,12 @@ public function ticket_assignment(){
     return $this->hasMany(TicketAssignment::class , 'teamId');
 }
 
+public function category(){
+    return $this->belongsTo(TicketCategory::class , 'ticket_category_id');
+}
+
 public function ticket_resolution(){
-    $this->hasMany(TicketResolution::class , 'resolved_by');
+    return $this->hasMany(TicketResolution::class , 'resolved_by');
 }
 
 }

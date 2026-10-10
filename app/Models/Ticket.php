@@ -23,6 +23,11 @@ class Ticket extends Model
 ];
 
 
+protected function casts(): array
+{
+    return ['attachment_url' => 'array'];
+}
+
 public function category(): BelongsTo
 {
     return $this->belongsTo(TicketCategory::class, 'categoryId');

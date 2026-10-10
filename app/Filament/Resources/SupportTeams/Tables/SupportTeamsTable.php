@@ -25,8 +25,13 @@ class SupportTeamsTable
                 TextColumn::make('email')
                     ->label('Email address')
                     ->searchable(),
-                TextColumn::make('specialty')
-                    ->searchable(),
+                TextColumn::make('category.category_name')
+                    ->label('Specialty')
+                    ->sortable(),
+                TextColumn::make('ticket_count')
+                    ->label('Tickets')
+                    ->formatStateUsing(fn ($state, $record) => "{$state} / {$record->max_ticket_capacity}")
+                    ->sortable(),
                 IconColumn::make('available')
                     ->boolean(),
                 TextColumn::make('created_at')

@@ -23,7 +23,7 @@ class TicketAssignment extends Model
     }
 
     public function ticket_resolution(){
-        $this->hasMany(TicketResolution::class , 'ticket_assignment_id');
+        return $this->hasMany(TicketResolution::class , 'ticket_assignment_id');
     }
 
 }

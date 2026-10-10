@@ -3,7 +3,6 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Ticket;
-use Filament\Support\Colors\Color;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -11,25 +10,25 @@ class StatsOverview extends StatsOverviewWidget
 {
     protected function getStats(): array
     {
+        $counts = Ticket::query()
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
 
-    $openTickets = count(Ticket::where('status' , '=' ,'OPEN' , 'and')->get());
-    $closedTickets = count(Ticket::where('status' , '=' ,'CLOSED' , 'and')->get());
         return [
-            //
-
-            Stat::make('Open Tickets' , $openTickets)
-                ->description("Number of open tickets")
+            Stat::make('Open Tickets', $counts['OPEN'] ?? 0)
+                ->description('Awaiting action')
                 ->descriptionIcon('heroicon-m-ticket')
-                  ->color('danger'),
-
-
-            Stat::make('Closed Tickets' , $closedTickets)
-                ->description("Number of closed tickets")
-                ->color('success'),
-
-            Stat::make('In Progress' , $closedTickets)
-                ->description("Number of In Progress tickets")
+                ->color('danger'),
+            Stat::make('In Progress', $counts['IN-PROGRESS'] ?? 0)
+                ->description('Currently being worked on')
                 ->color('warning'),
+            Stat::make('Resolved', $counts['RESOLVED'] ?? 0)
+                ->description('Resolved, pending closure')
+                ->color('info'),
+            Stat::make('Closed Tickets', $counts['CLOSED'] ?? 0)
+                ->description('Completed tickets')
+                ->color('success'),
         ];
     }
 }

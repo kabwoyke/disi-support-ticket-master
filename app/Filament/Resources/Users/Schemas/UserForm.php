@@ -20,7 +20,9 @@ class UserForm
                 DateTimePicker::make('email_verified_at'),
                 TextInput::make('password')
                     ->password()
-                    ->required(),
+                    ->revealable()
+                    ->required(fn (string $operation) => $operation === 'create')
+                    ->dehydrated(fn (?string $state) => filled($state)),
             ]);
     }
 }
