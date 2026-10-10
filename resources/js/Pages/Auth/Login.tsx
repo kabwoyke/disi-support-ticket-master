@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Wrench, Shield, Users, TrendingUp } from "lucide-react";
+import { Shield, Users, TrendingUp, ArrowLeft, Home } from "lucide-react";
 import '../../../css/solves.css';
 import { Form } from "@inertiajs/react";
 
@@ -12,20 +12,46 @@ import disilogo from "../../images/DISI-logo.png"
 export default function Login() {
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
 
-// console.log(loginForm)
+  // Go back if there is history to return to, otherwise fall back to the home page.
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = "/";
+    }
+  };
   return (
     <div className="min-h-screen flex">
 
       {/* Left side - Forms */}
       <div className="flex-1 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md">
+          <div className="flex items-center justify-between mb-6 text-sm">
+            <button
+              type="button"
+              onClick={goBack}
+              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              data-testid="button-back"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back
+            </button>
+            <a
+              href="/"
+              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              data-testid="link-home"
+            >
+              <Home className="h-4 w-4" /> Home
+            </a>
+          </div>
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mb-4">
-              <img
-                src={disilogo}
-                alt="DISI Logo"
-                className="h-16 w-auto object-contain"
-              />
+              <a href="/" aria-label="Go to home page">
+                <img
+                  src={disilogo}
+                  alt="DISI Logo"
+                  className="h-16 w-auto object-contain"
+                />
+              </a>
             </div>
             <h1 className="text-3xl font-bold text-dark-green dark:text-lime-green">DisiSolves</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">Solve all DISI IT issues</p>
@@ -75,6 +101,21 @@ export default function Login() {
               </Form>
             </CardContent>
           </Card>
+
+          <div className="mt-6 text-center text-sm text-muted-foreground space-y-1">
+            <p>
+              Need help from the ICT team?{" "}
+              <a href="/auth/login" className="font-semibold text-dark-green dark:text-lime-green hover:underline" data-testid="link-raise-ticket">
+                Raise a support ticket
+              </a>
+            </p>
+            <p>
+              ICT support staff?{" "}
+              <a href="/support/auth/login" className="font-semibold text-dark-green dark:text-lime-green hover:underline" data-testid="link-support-login">
+                Support team login
+              </a>
+            </p>
+          </div>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\View\PanelsRenderHook;
 use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
@@ -30,6 +31,13 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->login()
+            ->favicon('/icons/icon-192.png')
+            ->brandLogo(asset('disi-logo.avif'))
+            ->brandLogoHeight('2.5rem')
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn (): string => view('components.pwa-head')->render(),
+            )
             ->colors([
                 'primary' => [
                     50 => 'var(--color-primary-50)',

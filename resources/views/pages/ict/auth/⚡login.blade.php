@@ -117,6 +117,17 @@ new class extends Component
             </form>
         </div>
 
+        <!-- Other portals -->
+        <div class="text-center text-sm space-y-1">
+            <p>Not support staff?
+                <a href="/auth/login" class="font-semibold text-primary hover:underline">Raise a support ticket</a>
+            </p>
+            <p>Looking for answers to IT problems?
+                <a href="/disi-solves/auth/login" class="font-semibold text-primary hover:underline">Go to Disi Solves</a>
+            </p>
+            <p><a href="/" class="text-base-content/70 hover:underline">&larr; Back to home</a></p>
+        </div>
+
         <!-- Footer Notice -->
         <div class="text-center text-xs text-base-content/50 space-y-1">
             <p>Protected System — Authorized Personnel Only</p>

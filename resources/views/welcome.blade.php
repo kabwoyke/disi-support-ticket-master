@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Disi Group | Support tickets and Disi Solves</title>
     <meta name="description" content="Raise a support ticket with Disi Group, or search Disi Solves for answers to scanning and IT support problems.">
+    <x-pwa-head />
     @vite(['resources/css/solves.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-background text-foreground">

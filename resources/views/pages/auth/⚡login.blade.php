@@ -57,6 +57,13 @@ new class extends Component
                 <button class="btn btn-primary w-full mt-4">Login</button>
                 <a href="" class="text-sm font-normal text-primary hover:underline mt-2 block text-center">Don't have an account? Signup</a>
                  </form>
+                <div class="mt-6 text-center text-sm space-y-1">
+                    <p>Looking for answers to IT problems?
+                        <a href="/disi-solves/auth/login" class="font-semibold text-primary hover:underline">Go to Disi Solves</a>
+                    </p>
+                    <p><a href="/support/auth/login" class="text-base-content/70 hover:underline">Support team login</a></p>
+                    <p><a href="/" class="text-base-content/70 hover:underline">&larr; Back to home</a></p>
+                </div>
             </div>
         </div>
     </div>

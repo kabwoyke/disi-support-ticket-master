@@ -5,6 +5,7 @@
          @viteReactRefresh
          @routes
         @vite(['resources/js/app.js'])
+        <x-pwa-head />
         <x-inertia::head />
     </head>
     <body>
