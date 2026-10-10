@@ -1,20 +1,65 @@
-import {Sidebar} from "../components/sidebar";
-import { RaiseIssueModal } from "@/components/raise-issue-modal";
+import { useState } from "react";
+import { Link, router, usePage } from "@inertiajs/react";
+import moment from "moment";
+import { History, MessageSquare, HelpCircle, Clock, Check, X, Trash2 } from "lucide-react";
+import { Sidebar } from "../components/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { History, MessageSquare, HelpCircle, Calendar } from "lucide-react";
-import { Link } from "wouter";
-import { useState } from "react";
-import "../../css/solves.css"
+import { Button } from "@/components/ui/button";
+import "../../css/solves.css";
+
+type Status = "pending" | "approved" | "rejected";
+
+interface ActivityItem {
+  type: "question" | "answer";
+  id: number;
+  question_id: number;
+  title: string;
+  category?: string | null;
+  status: Status;
+  excerpt?: string;
+  views?: number;
+  answer_count?: number;
+  created_at: string;
+}
+
+interface ActivityProps {
+  items: ActivityItem[];
+  stats: { questions: number; answers: number; pending: number; approved: number };
+  [key: string]: unknown;
+}
+
+const statusStyles: Record<Status, string> = {
+  pending: "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300",
+  approved: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300",
+  rejected: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300",
+};
+
+const statusIcon = (s: Status) =>
+  s === "approved" ? <Check className="mr-1 h-3 w-3" /> : s === "pending" ? <Clock className="mr-1 h-3 w-3" /> : <X className="mr-1 h-3 w-3" />;
+
+const filters = [
+  { key: "all", label: "All" },
+  { key: "question", label: "Questions" },
+  { key: "answer", label: "Answers" },
+] as const;
 
 export default function Activity() {
+  const { items, stats } = usePage<ActivityProps>().props;
+  const [filter, setFilter] = useState<(typeof filters)[number]["key"]>("all");
 
-    const [isOpen , setIsOpen] = useState(false)
-    const [showRaiseIssueModal, setShowRaiseIssueModal] = useState(false);
-    const [showAdminPostModal, setShowAdminPostModal] = useState(false);
+  const visible = items.filter((i) => filter === "all" || i.type === filter);
+
+  const handleDelete = (item: ActivityItem) => {
+    const url = item.type === "question" ? `/disi-solves/questions/${item.id}` : `/disi-solves/answers/${item.id}`;
+    if (confirm(`Delete this ${item.type}? This cannot be undone.`)) {
+      router.delete(url, { preserveScroll: true });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
-       <Sidebar />
+      <Sidebar />
 
       <main className="ml-64 min-h-screen">
         <header className="bg-card border-b border-border p-6">
@@ -27,94 +72,108 @@ export default function Activity() {
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {[
+              ["Questions asked", stats.questions],
+              ["Answers given", stats.answers],
+              ["Awaiting review", stats.pending],
+              ["Approved", stats.approved],
+            ].map(([label, value]) => (
+              <Card key={label as string}>
+                <CardContent className="p-5">
+                  <p className="text-sm text-muted-foreground">{label}</p>
+                  <p className="text-3xl font-bold text-foreground">{value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
           <Card>
             <CardHeader>
-              <CardTitle>Recent Activity (2 items)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Sample Question Item */}
-                <div className="flex items-start space-x-4 p-4 border border-border rounded-lg">
-                  <div className="w-10 h-10 bg-lime-green/10 rounded-full flex items-center justify-center flex-shrink-0">
-                    <HelpCircle className="h-5 w-5 text-lime-green" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Posted Question
-                          </span>
-                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300">
-                            approved
-                          </Badge>
-                        </div>
-
-                        <h3 className="font-medium text-foreground mb-1">
-                          Sample Question Title
-                        </h3>
-
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-4 w-4" />
-                            <span>8/31/2026</span>
-                          </div>
-                          <Link href="/questions/1" className="text-primary hover:underline">
-                            View Details
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sample Answer Item */}
-                <div className="flex items-start space-x-4 p-4 border border-border rounded-lg">
-                  <div className="w-10 h-10 bg-lime-green/10 rounded-full flex items-center justify-center flex-shrink-0">
-                    <MessageSquare className="h-5 w-5 text-lime-green" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Posted Answer
-                          </span>
-                          <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-                            pending
-                          </Badge>
-                        </div>
-
-                        <h3 className="font-medium text-foreground mb-1">
-                          Answer to: Sample Question Title
-                        </h3>
-
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-4 w-4" />
-                            <span>8/31/2026</span>
-                          </div>
-                          <Link href="/questions/1" className="text-primary hover:underline">
-                            View Question
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              <div className="flex items-center justify-between">
+                <CardTitle>Recent Activity ({visible.length} {visible.length === 1 ? "item" : "items"})</CardTitle>
+                <div className="flex gap-1">
+                  {filters.map((f) => (
+                    <Button
+                      key={f.key}
+                      size="sm"
+                      variant={filter === f.key ? "default" : "ghost"}
+                      onClick={() => setFilter(f.key)}
+                    >
+                      {f.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              {visible.length === 0 ? (
+                <p className="py-8 text-center text-muted-foreground">
+                  Nothing here yet. Raise an issue or answer one to see it listed.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {visible.map((item) => (
+                    <div key={`${item.type}-${item.id}`} className="flex items-start space-x-4 rounded-lg border border-border p-4">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-lime-green/10">
+                        {item.type === "question" ? (
+                          <HelpCircle className="h-5 w-5 text-lime-green" />
+                        ) : (
+                          <MessageSquare className="h-5 w-5 text-lime-green" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center space-x-2">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {item.type === "question" ? "Posted question" : "Answered"}
+                          </span>
+                          <Badge className={statusStyles[item.status]}>
+                            {statusIcon(item.status)}
+                            {item.status}
+                          </Badge>
+                          {item.category && <Badge variant="secondary">{item.category.toUpperCase()}</Badge>}
+                        </div>
+
+                        <Link href={`/disi-solves/${item.question_id}/details`} className="mb-1 block font-medium text-foreground hover:text-primary">
+                          {item.title}
+                        </Link>
+
+                        {item.excerpt && <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">{item.excerpt}</p>}
+
+                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                          <span className="flex items-center space-x-1">
+                            <Clock className="h-4 w-4" />
+                            <span>{moment(item.created_at).fromNow()}</span>
+                          </span>
+                          {item.type === "question" && (
+                            <span>
+                              {item.views ?? 0} views, {item.answer_count ?? 0} answers
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {item.status === "pending" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title={`Delete ${item.type}`}
+                          onClick={() => handleDelete(item)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
       </main>
-
-       <RaiseIssueModal
-        open={showRaiseIssueModal}
-        onOpenChange={setShowRaiseIssueModal}
-      />
     </div>
   );
 }

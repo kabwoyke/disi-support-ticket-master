@@ -8,7 +8,7 @@ import moment from "moment"
 
 interface QuestionCardProps {
   question?: {
-    id?: number;
+    id?: number | string;
     title?: string;
     description?: string;
     category?: string;
@@ -70,10 +70,10 @@ export function QuestionCard({ question , onTap }: QuestionCardProps = {}) {
     e.stopPropagation();
     if (!question?.id) return;
 
-    if (confirm("Are you sure you want to delete this question?")) {
-      router.delete("/solves.questions.destroy"), {
+    if (confirm("Delete this question and all of its answers? This cannot be undone.")) {
+      router.delete(`/disi-solves/questions/${question.id}`, {
         preserveScroll: true,
-      };
+      });
     }
   };
 
@@ -96,23 +96,23 @@ export function QuestionCard({ question , onTap }: QuestionCardProps = {}) {
                     : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300"
                 }
               >
-                <Check className="mr-1 h-3 w-3" />
+                {status === "approved" ? <Check className="mr-1 h-3 w-3" /> : status === "pending" ? <Clock className="mr-1 h-3 w-3" /> : <X className="mr-1 h-3 w-3" />}
                 {status}
               </Badge>
             </div>
 
             <h4 className="text-lg font-semibold text-foreground mb-2 hover:text-primary">
-              {question?.title || "Sample Question Title"}
+              {question?.title}
             </h4>
 
             <p className="text-muted-foreground mb-4 line-clamp-2">
-              {question?.description || "This is a placeholder description for previewing the static card layout."}
+              {question?.description}
             </p>
 
             {question?.attachment && (
               <div className="mb-4">
                 <img
-                  src={`/uploads/${question.attachment}`}
+                  src={question.attachment.startsWith("http") ? question.attachment : `/storage/${question.attachment}`}
                   alt="Question attachment"
                   className="max-w-full h-auto rounded-lg border"
                   style={{ maxHeight: "200px" }}
@@ -136,14 +136,14 @@ export function QuestionCard({ question , onTap }: QuestionCardProps = {}) {
                 </div>
                 <div className="flex items-center space-x-1">
                   <Eye className="h-4 w-4" />
-                  <span>{question?.views ?? 24} views</span>
+                  <span>{question?.views ?? 0} views</span>
                 </div>
               </div>
 
               <div className="flex items-center space-x-2">
                 <Badge variant="secondary" className="flex items-center">
                   <MessageCircle className="mr-1 h-3 w-3" />
-                  {question?.answerCount ?? 3}
+                  {question?.answerCount ?? 0}
                 </Badge>
 
                 {/* Admin approval/rejection & delete actions */}

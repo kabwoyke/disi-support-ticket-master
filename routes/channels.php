@@ -27,3 +27,28 @@ Broadcast::channel('admin-chat.{chatId}', function ($user, $chatId) {
 
     return $chat && ((int) $user->id === (int) $chat->user_id);
 }, ['guards' => ['web', 'support']]);
+
+// Presence channel: lets both sides see who is online and exchange typing whispers.
+Broadcast::channel('chat.{chatId}', function ($user, $chatId) {
+    $chat = Chat::find($chatId);
+
+    if (! $chat) {
+        return false;
+    }
+
+    if (auth()->guard('support')->check()) {
+        $member = auth()->guard('support')->user();
+        $type = 'admin';
+    } elseif ((int) $user->id === (int) $chat->user_id) {
+        $member = $user;
+        $type = 'user';
+    } else {
+        return false;
+    }
+
+    return [
+        'id' => $member->id,
+        'type' => $type,
+        'name' => $member->display_name,
+    ];
+}, ['guards' => ['web', 'support']]);

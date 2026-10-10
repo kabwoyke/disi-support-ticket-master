@@ -16,15 +16,17 @@ class UserChat implements ShouldBroadcast
     public string $userText;
     public string|int $chatId;
     public ?string $attachment;
+    public ?int $messageId;
 
     /**
      * Create a new event instance.
      */
-    public function __construct(string $userText, string|int $chatId, ?string $attachment = null)
+    public function __construct(string $userText, string|int $chatId, ?string $attachment = null, ?int $messageId = null)
     {
         $this->userText = $userText;
         $this->chatId = $chatId;
         $this->attachment = $attachment;
+        $this->messageId = $messageId;
     }
 
     /**
@@ -58,6 +60,7 @@ class UserChat implements ShouldBroadcast
             'userText'   => $this->userText,
             'chatId'     => $this->chatId,
             'attachment' => $this->attachment, // <-- Added here
+            'messageId'  => $this->messageId,
         ];
     }
 }

@@ -16,15 +16,17 @@ class AdminChat implements ShouldBroadcast
     public string $adminText;
     public string|int $chatId;
     public ?string $attachment; // 1. Added property
+    public ?int $messageId;
 
     /**
      * Create a new event instance.
      */
-    public function __construct(string $adminText, string|int $chatId, ?string $attachment = null) // 2. Accept nullable attachment
+    public function __construct(string $adminText, string|int $chatId, ?string $attachment = null, ?int $messageId = null) // 2. Accept nullable attachment
     {
         $this->adminText = $adminText;
         $this->chatId = $chatId;
         $this->attachment = $attachment;
+        $this->messageId = $messageId;
     }
 
     /**
@@ -58,6 +60,7 @@ class AdminChat implements ShouldBroadcast
             'adminText'  => $this->adminText,
             'chatId'     => $this->chatId,
             'attachment' => $this->attachment, // 3. Include attachment in payload
+            'messageId'  => $this->messageId,
         ];
     }
 }

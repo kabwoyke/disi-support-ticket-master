@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Clock, Eye, User, MessageCircle, Send, Check, X, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, Eye, User, MessageCircle, Send, Check, X, Loader2, Trash2 } from "lucide-react";
 import '../../css/solves.css'
 import { router, useForm, usePage } from "@inertiajs/react";
 import { PageProps as InertiaPageProps, PageProps as Page } from "@inertiajs/core";
@@ -22,6 +22,7 @@ export interface Author {
 export interface Answer {
   id?: number;
   question_id?: number;
+  created_by?: number;
   answer_text: string;
   status: "pending" | "approved" | "rejected";
   attachment?: string | null;
@@ -80,6 +81,29 @@ export default function QuestionDetail() {
     const q = usePage<PageProps>().props
     const fileInputRef = useRef<HTMLInputElement>(null)
     const isAdmin = q.solves?.user?.role === "admin"
+    const currentUserId = q.solves?.user?.id
+
+    const displayName = (a?: Author | null) =>
+      a ? `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim() || a.username : "Unknown";
+
+    // Admins can delete anything; authors can delete their own items while still pending.
+    const canDeleteQuestion =
+      isAdmin || (q.question.created_by === currentUserId && q.question.status === "pending");
+    const canDeleteAnswer = (a: Answer) =>
+      isAdmin || (a.created_by === currentUserId && a.status === "pending");
+
+    const handleDeleteQuestion = () => {
+      if (confirm("Delete this question and all of its answers? This cannot be undone.")) {
+        router.delete(`/disi-solves/questions/${q.question.id}`);
+      }
+    };
+
+    const handleDeleteAnswer = (answerId?: number) => {
+      if (!answerId) return;
+      if (confirm("Delete this answer? This cannot be undone.")) {
+        router.delete(`/disi-solves/answers/${answerId}`, { preserveScroll: true });
+      }
+    };
 
     const answerForm = useForm<AnswerFormData>({
       answer_text: "",
@@ -148,8 +172,8 @@ export default function QuestionDetail() {
                     <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
                       {q.question.category}
                     </Badge>
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300">
-                      <Check className="mr-1 h-3 w-3" />
+                    <Badge className={statusStyles[q.question.status]}>
+                      {statusIcons[q.question.status]}
                       {q.question.status}
                     </Badge>
 
@@ -159,6 +183,17 @@ export default function QuestionDetail() {
                   </div>
                   <CardTitle className="text-2xl mb-4">{q.question.title}</CardTitle>
                 </div>
+                {canDeleteQuestion && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    onClick={handleDeleteQuestion}
+                    title="Delete question"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -186,7 +221,7 @@ export default function QuestionDetail() {
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                   <div className="flex items-center space-x-1">
                     <User className="h-4 w-4" />
-                    <span>John Doe</span>
+                    <span>{displayName(q.question.author)}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <Clock className="h-4 w-4" />
@@ -209,7 +244,7 @@ export default function QuestionDetail() {
           {/* Answers Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Answers ({q.question.answer?.length})</CardTitle>
+              <CardTitle>Answers ({q.question.answer?.length ?? 0})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -226,26 +261,41 @@ export default function QuestionDetail() {
                         </Badge>
 
                         {/* Admin Action Controls — only shown for answers awaiting review */}
-                        {isAdmin && answer.status === "pending" && (
-                          <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2">
+                          {isAdmin && answer.status !== "approved" && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
                               onClick={() => handleApprove(answer.id)}
+                              title="Approve answer"
                             >
                               <Check className="h-4 w-4" />
                             </Button>
+                          )}
+                          {isAdmin && answer.status !== "rejected" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                              onClick={() => handleReject(answer.id)}
+                              title="Reject answer"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDeleteAnswer(answer) && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                              onClick={() => handleReject(answer.id)}
+                              onClick={() => handleDeleteAnswer(answer.id)}
+                              title="Delete answer"
                             >
-                              <X className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
 
                       <div className="prose dark:prose-invert mb-4">
@@ -271,7 +321,7 @@ export default function QuestionDetail() {
                       <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                         <div className="flex items-center space-x-1">
                           <User className="h-4 w-4" />
-                          <span>{answer.author.first_name}</span>
+                          <span>{displayName(answer.author)}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Clock className="h-4 w-4" />

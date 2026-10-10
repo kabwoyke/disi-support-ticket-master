@@ -3,8 +3,11 @@
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use App\Events\AdminChat;
+use App\Events\MessagesRead;
 use App\Models\ChatMessage;
 use App\Models\Chat;
+use App\Models\Ticket;
+use App\Notifications\NewChatMessage;
 use Livewire\Attributes\Url;
 use Illuminate\Support\Facades\Storage;
 
@@ -12,12 +15,17 @@ new class extends Component
 {
     use WithFileUploads;
 
+    private const SUPPORT = 'App\Models\SupportTeam';
+
     #[Url]
     public $ticket = '';
 
     public array $messages = [];
     public string $adminReply = '';
     public $attachment = null;
+    public string $search = '';
+    public int $limit = 50;
+    public bool $hasMore = false;
 
     public function mount(): void
     {
@@ -26,53 +34,54 @@ new class extends Component
         }
 
         $this->loadMessages();
+        $this->markRead();
     }
 
-    protected function getActiveChat(): ?Chat
+    protected function format(ChatMessage $msg): array
     {
-        if (!$this->ticket) {
-            return null;
-        }
+        $fromAdmin = $msg->sender_type === self::SUPPORT;
+        $sender = $msg->sender;
 
-        return Chat::firstOrCreate(
-            ['id' => $this->ticket],
-            ['support_id' => auth('support')->id()]
-        );
+        return [
+            'id' => 'msg_' . $msg->id,
+            'db_id' => $msg->id,
+            'sender' => $fromAdmin ? 'admin' : 'user',
+            'name' => $sender?->display_name ?? ($fromAdmin ? 'Support' : 'User'),
+            'avatar' => $sender?->avatar_url,
+            'text' => $msg->message,
+            'attachment' => $msg->attachment_path ? Storage::disk('public')->url($msg->attachment_path) : null,
+            'file_name' => $msg->attachment_path ? basename($msg->attachment_path) : null,
+            'time' => $msg->created_at->timezone('Africa/Nairobi')->format('g:i A'),
+            'date' => $msg->created_at->timezone('Africa/Nairobi')->format('D, j M Y'),
+            'read' => $msg->read_at !== null,
+        ];
     }
 
     public function loadMessages(): void
     {
         if (!$this->ticket) {
             $this->messages = [];
+            $this->hasMore = false;
             return;
         }
 
-        $this->messages = ChatMessage::where('chat_id', $this->ticket)
-            ->oldest()
+        $this->hasMore = ChatMessage::where('chat_id', $this->ticket)->count() > $this->limit;
+
+        $this->messages = ChatMessage::with('sender')
+            ->where('chat_id', $this->ticket)
+            ->latest('id')
+            ->limit($this->limit)
             ->get()
-            ->map(fn ($msg) => [
-                'id' => 'msg_' . $msg->id,
-                'sender' => $msg->sender_type === 'App\Models\SupportTeam'
-                    ? 'admin'
-                    : 'user',
-                'text' => $msg->message,
-                'attachment' => $msg->attachment_path
-                    ? Storage::url($msg->attachment_path)
-                    : null,
-                'time' => $msg->created_at
-                    ->timezone('Africa/Nairobi')
-                    ->format('g:i A'),
-            ])
-            ->toArray();
+            ->reverse()
+            ->values()
+            ->map(fn ($msg) => $this->format($msg))
+            ->all();
     }
 
-    public function getLastMessage(): ?array
+    public function loadEarlier(): void
     {
-        if (empty($this->messages)) {
-            return null;
-        }
-
-        return $this->messages[array_key_last($this->messages)];
+        $this->limit += 50;
+        $this->loadMessages();
     }
 
     public function getListeners(): array
@@ -82,29 +91,68 @@ new class extends Component
         }
 
         return [
-            "echo-private:admin-chat.{$this->ticket},.UserChat" => 'recieveUserMessage',
+            "echo-private:admin-chat.{$this->ticket},.UserChat" => 'receiveUserMessage',
+            "echo-private:admin-chat.{$this->ticket},.MessagesRead" => 'onMessagesRead',
         ];
     }
 
-    public function recieveUserMessage(array $event): void
+    public function receiveUserMessage(array $event): void
     {
-        if (!empty($event['userText']) || !empty($event['attachment'])) {
-            $this->messages[] = [
-                'id' => uniqid('msg_'),
-                'sender' => 'user',
-                'text' => $event['userText'] ?? '',
-                'attachment' => $event['attachment'] ?? null,
-                'time' => now()
-                    ->timezone('Africa/Nairobi')
-                    ->format('g:i A'),
-            ];
+        $dbId = $event['messageId'] ?? null;
+
+        if ($dbId && collect($this->messages)->contains('db_id', $dbId)) {
+            return;
         }
+
+        if ($dbId && ($msg = ChatMessage::with('sender')->find($dbId))) {
+            $this->messages[] = $this->format($msg);
+            $this->markRead();
+        }
+    }
+
+    /** The user opened the chat: flag everything we sent as seen. */
+    public function onMessagesRead(array $event): void
+    {
+        if (($event['readerType'] ?? null) !== 'user') {
+            return;
+        }
+
+        $this->messages = array_map(
+            fn ($m) => $m['sender'] === 'admin' ? [...$m, 'read' => true] : $m,
+            $this->messages
+        );
+    }
+
+    /** Mark the customer's messages as read and let them know. */
+    public function markRead(): void
+    {
+        if (!$this->ticket) {
+            return;
+        }
+
+        $updated = ChatMessage::where('chat_id', $this->ticket)
+            ->where('sender_type', 'App\Models\User')
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        if ($updated) {
+            broadcast(new MessagesRead((int) $this->ticket, 'admin'))->toOthers();
+        }
+
+        // Opening the chat clears its notifications and refreshes the nav badge.
+        $agent = auth('support')->user();
+        $agent->unreadNotifications()
+            ->where('type', NewChatMessage::class)
+            ->where('data->chat_id', (int) $this->ticket)
+            ->update(['read_at' => now()]);
+
+        $this->dispatch('chat-unread', count: $agent->unreadNotifications()->where('type', NewChatMessage::class)->count());
     }
 
     public function sendAdminReply(): void
     {
         $this->validate([
-            'adminReply' => 'nullable|string',
+            'adminReply' => 'nullable|string|max:5000',
             'attachment' => 'nullable|file|max:10240',
         ]);
 
@@ -112,674 +160,241 @@ new class extends Component
             return;
         }
 
-        $chat = $this->getActiveChat();
+        $ticket = $this->ticket ? Ticket::find($this->ticket) : null;
 
-        if (!$chat) {
+        if (!$ticket) {
             return;
         }
 
-        // Store attachment if selected
-        $storedPath = null;
+        $chat = Chat::firstOrCreate(
+            ['id' => $ticket->id],
+            ['user_id' => $ticket->userId, 'support_id' => auth('support')->id()]
+        );
 
-        if ($this->attachment) {
-            $storedPath = $this->attachment->store(
-                'chat-attachments',
-                'public'
-            );
-        }
+        $storedPath = $this->attachment?->store('chat-attachments', 'public');
 
-        // Save message to database
-        $savedMessage = ChatMessage::create([
+        $saved = ChatMessage::create([
             'chat_id' => $chat->id,
-            'sender_type' => 'App\Models\SupportTeam',
+            'sender_type' => self::SUPPORT,
             'sender_id' => auth('support')->id(),
-            'message' => $this->adminReply ?? '',
+            'message' => trim($this->adminReply),
             'attachment_path' => $storedPath,
         ]);
 
-        $attachmentUrl = $storedPath
-            ? Storage::url($storedPath)
-            : null;
+        $attachmentUrl = $storedPath ? Storage::disk('public')->url($storedPath) : null;
 
-        // Broadcast to user
-        AdminChat::dispatch(
-            $this->adminReply,
-            (int) $chat->id,
-            $attachmentUrl
-        );
+        AdminChat::dispatch($saved->message, (int) $chat->id, $attachmentUrl, $saved->id);
 
-        // Append to local state
-        $this->messages[] = [
-            'id' => 'msg_' . $savedMessage->id,
-            'sender' => 'admin',
-            'text' => $this->adminReply,
-            'attachment' => $attachmentUrl,
-            'time' => $savedMessage->created_at
-                ->timezone('Africa/Nairobi')
-                ->format('g:i A'),
-        ];
+        $this->messages[] = $this->format($saved->setRelation('sender', auth('support')->user()));
 
-        $this->reset([
-            'adminReply',
-            'attachment',
-        ]);
+        // Tell the customer there's a new reply.
+        $ticket->user?->notify(new NewChatMessage($saved, auth('support')->user()->display_name, false));
+
+        $this->reset(['adminReply', 'attachment']);
+    }
+
+    /** Conversations for the sidebar, newest activity first, with unread counts. */
+    protected function conversations()
+    {
+        $chats = Chat::with('user')
+            ->withCount(['messages as unread_count' => fn ($q) => $q
+                ->where('sender_type', 'App\Models\User')
+                ->whereNull('read_at')])
+            ->withMax('messages', 'created_at')
+            ->when($this->search !== '', fn ($q) => $q->where(fn ($q) => $q
+                ->where('id', 'like', '%' . ltrim($this->search, '#T-0') . '%')
+                ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$this->search}%")
+                    ->orWhere('email', 'like', "%{$this->search}%"))))
+            ->orderByDesc('messages_max_created_at')
+            ->limit(50)
+            ->get();
+
+        $last = ChatMessage::whereIn('chat_id', $chats->pluck('id'))
+            ->latest('id')->get()->unique('chat_id')->keyBy('chat_id');
+
+        return $chats->each(fn ($c) => $c->last_message = $last[$c->id] ?? null);
     }
 
     public function render()
     {
-        return view('pages::ict.features.⚡chat')
-            ->layout('layouts::support');
+        return view('pages::ict.features.⚡chat', [
+            'conversations' => $this->conversations(),
+            'ticketDetail' => $this->ticket
+                ? Ticket::with(['user', 'desk', 'department'])->find($this->ticket)
+                : null,
+        ])->layout('layouts::support');
     }
 };
 ?>
 
-@php
-    /*
-     * Safely get the latest message.
-     *
-     * When a user has not started the chat yet,
-     * $messages is empty and this will be null.
-     */
-    $lastMessage = !empty($messages)
-        ? $messages[array_key_last($messages)]
-        : null;
-@endphp
-
 <div>
-    <div class="h-[calc(100vh-5rem)] max-w-7xl mx-auto p-4 flex gap-4">
+    <div
+        x-data="chatRoom({ chatId: @js($ticket ?: null), me: 'admin' })"
+        class="h-[calc(100vh-5rem)] max-w-7xl mx-auto p-4 flex gap-4"
+    >
 
-        <!-- ============================================================
-             SIDEBAR: CONVERSATION / TICKET LIST
-        ============================================================= -->
-        <div class="w-full md:w-80 lg:w-96 bg-base-100 rounded-box border border-base-200 shadow-sm flex flex-col shrink-0">
-
-            <!-- Sidebar Header & Search -->
+        <!-- Conversation list -->
+        <div class="w-full md:w-80 lg:w-96 bg-base-100 rounded-box border border-base-200 shadow-sm flex flex-col shrink-0 {{ $ticket ? 'hidden md:flex' : '' }}">
             <div class="p-4 border-b border-base-200 space-y-3">
-
-                <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-bold text-base-content">
-                        Support Chats
-                    </h2>
-                </div>
-
+                <h2 class="text-lg font-bold text-base-content">Support Chats</h2>
                 <div class="relative">
                     <input
                         type="text"
-                        placeholder="Search conversation or user..."
+                        wire:model.live.debounce.300ms="search"
+                        placeholder="Search by user or ticket..."
                         class="input input-sm input-bordered w-full pl-9 text-xs"
                     />
-
-                    <svg
-                        class="w-4 h-4 absolute left-3 top-2.5 text-base-content/40"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
-                    </svg>
+                    <svg class="w-4 h-4 absolute left-3 top-2.5 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 </div>
-
             </div>
 
-
-            <!-- ========================================================
-                 CONVERSATIONS LIST
-            ========================================================= -->
-            <div class="flex-1 overflow-y-auto divide-y divide-base-200">
-
-                <button
-                    class="w-full p-3 text-left flex items-start gap-3 bg-base-200/60 border-l-4 border-primary transition-all"
-                >
-
-                    <!-- Avatar -->
-                    <div class="avatar online shrink-0">
-                        <div class="w-10 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
-
-                            <img
-                                src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRoeZOBBidNgNcGNpV6v4cwHkHPfhp98-J75q0kd2z1Qv9Da0Cimld3WA&s=10"
-                                alt="profile"
-                            />
-
-                        </div>
-                    </div>
-
-
-                    <!-- Conversation Information -->
-                    <div class="flex-1 min-w-0">
-
-                        <div class="flex items-center justify-between">
-
-                            <h3 class="text-xs font-bold text-base-content truncate">
-                                Mary Atieno
-                            </h3>
-
-                            <!-- SAFE: works even when there are no messages -->
-                            <span class="text-[10px] text-base-content/50">
-                                {{ $lastMessage['time'] ?? 'New' }}
-                            </span>
-
+            <div wire:poll.15s class="flex-1 overflow-y-auto divide-y divide-base-200">
+                @forelse ($conversations as $chat)
+                    @php $active = (string) $chat->id === (string) $ticket; @endphp
+                    <a
+                        wire:key="chat_{{ $chat->id }}"
+                        wire:navigate
+                        href="{{ route('support-chat', ['ticket' => $chat->id]) }}"
+                        class="w-full p-3 flex items-start gap-3 transition-all hover:bg-base-200/60 {{ $active ? 'bg-base-200/60 border-l-4 border-primary' : '' }}"
+                    >
+                        <div class="avatar shrink-0">
+                            <div class="w-10 rounded-full">
+                                <img src="{{ $chat->user?->avatar_url }}" alt="{{ $chat->user?->display_name }}" />
+                            </div>
                         </div>
 
-
-                        <span class="font-mono text-[10px] font-semibold text-primary block">
-                            #T-00104
-                        </span>
-
-
-                        <!-- =================================================
-                             LAST MESSAGE PREVIEW
-                        ================================================== -->
-                        <p class="text-xs text-base-content/70 truncate mt-0.5">
-
-                            @if ($lastMessage)
-
-                                @if (!empty($lastMessage['text']))
-
-                                    {{ $lastMessage['text'] }}
-
-                                @elseif (!empty($lastMessage['attachment']))
-
-                                    [Attachment]
-
-                                @else
-
-                                    Support Needed
-
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2">
+                                <h3 class="text-xs font-bold text-base-content truncate">{{ $chat->user?->display_name ?? 'Unknown user' }}</h3>
+                                <span class="text-[10px] text-base-content/50 shrink-0">
+                                    {{ $chat->last_message?->created_at->timezone('Africa/Nairobi')->diffForHumans(short: true) }}
+                                </span>
+                            </div>
+                            <span class="font-mono text-[10px] font-semibold text-primary block">#T-{{ str_pad($chat->id, 5, '0', STR_PAD_LEFT) }}</span>
+                            <div class="flex items-center justify-between gap-2 mt-0.5">
+                                <p class="text-xs text-base-content/70 truncate">
+                                    @if ($chat->last_message)
+                                        {{ $chat->last_message->message !== '' ? $chat->last_message->message : '[Attachment]' }}
+                                    @else
+                                        New support request
+                                    @endif
+                                </p>
+                                @if ($chat->unread_count > 0 && !$active)
+                                    <span class="badge badge-primary badge-sm text-white">{{ $chat->unread_count }}</span>
                                 @endif
-
-                            @else
-
-                                New support request
-
-                            @endif
-
-                        </p>
-
-                    </div>
-
-                </button>
-
+                            </div>
+                        </div>
+                    </a>
+                @empty
+                    <p class="p-6 text-center text-xs text-base-content/50">No conversations yet.</p>
+                @endforelse
             </div>
-
         </div>
 
-
-        <!-- ============================================================
-             MAIN CHAT WINDOW
-        ============================================================= -->
-        <div class="flex-1 bg-base-100 rounded-box border border-base-200 shadow-sm flex flex-col overflow-hidden">
-
-
-            <!-- ========================================================
-                 CHAT HEADER
-            ========================================================= -->
-            <div class="p-4 border-b border-base-200 flex items-center justify-between bg-base-100">
-
-                <div class="flex items-center gap-3">
-
-                    <div class="avatar online">
-
-                        <div class="w-10 rounded-full">
-
-                            <img
-                                src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRoeZOBBidNgNcGNpV6v4cwHkHPfhp98-J75q0kd2z1Qv9Da0Cimld3WA&s=10"
-                                alt="Avatar"
-                            />
-
-                        </div>
-
-                    </div>
-
-
+        <!-- Chat window -->
+        <div class="flex-1 bg-base-100 rounded-box border border-base-200 shadow-sm flex flex-col overflow-hidden {{ $ticket ? '' : 'hidden md:flex' }}">
+            @if (!$ticketDetail)
+                <div class="flex-1 flex items-center justify-center text-center text-xs text-base-content/40">
                     <div>
-
-                        <div class="flex items-center gap-2">
-
-                            <h2 class="text-sm font-bold text-base-content">
-                                Mary Atieno
-                            </h2>
-
-                            <span class="font-mono text-xs text-primary font-semibold">
-                                #T-00104
-                            </span>
-
+                        <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.5 9.5 0 01-4.086-.915L3 20l1.086-4.342A7.95 7.95 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                        <p>Select a conversation to start replying.</p>
+                    </div>
+                </div>
+            @else
+                <!-- Header -->
+                <div class="p-4 border-b border-base-200 flex items-center justify-between bg-base-100">
+                    <div class="flex items-center gap-3">
+                        <a wire:navigate href="{{ route('support-chat') }}" class="btn btn-sm btn-ghost btn-circle md:hidden" title="Back">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                        </a>
+                        <div class="avatar" :class="online && 'online'">
+                            <div class="w-10 rounded-full">
+                                <img src="{{ $ticketDetail->user?->avatar_url }}" alt="{{ $ticketDetail->user?->display_name }}" />
+                            </div>
                         </div>
-
-                        <p class="text-xs text-base-content/60">
-                            Quality Control &bull; Desk 04
-                        </p>
-
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-sm font-bold text-base-content">{{ $ticketDetail->user?->display_name }}</h2>
+                                <span class="font-mono text-xs text-primary font-semibold">#T-{{ str_pad($ticketDetail->id, 5, '0', STR_PAD_LEFT) }}</span>
+                            </div>
+                            <p class="text-xs text-base-content/60">
+                                <span x-show="typing" x-cloak class="text-primary">typing...</span>
+                                <span x-show="!typing">
+                                    <span x-text="online ? 'Online' : 'Offline'" :class="online ? 'text-success' : ''"></span>
+                                    &bull; {{ $ticketDetail->department?->department_name }} &bull; {{ $ticketDetail->desk?->desk_name }}
+                                </span>
+                            </p>
+                        </div>
                     </div>
 
+                    <div class="flex items-center gap-2">
+                        <span class="badge badge-warning text-white font-semibold text-xs hidden sm:inline-flex">{{ $ticketDetail->priority }}</span>
+                        <span class="badge badge-outline text-xs">{{ $ticketDetail->status }}</span>
+                    </div>
                 </div>
 
-
-                <div class="flex items-center gap-2">
-
-                    <span class="badge badge-warning text-white font-semibold text-xs hidden sm:inline-flex">
-                        HIGH PRIORITY
-                    </span>
-
-                    <span class="badge badge-outline text-xs">
-                        IN PROGRESS
-                    </span>
-
-                    <button
-                        class="btn btn-sm btn-ghost btn-circle"
-                        title="View Ticket Details"
-                    >
-
-                        <svg
-                            class="w-5 h-5 text-base-content/70"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                        </svg>
-
-                    </button>
-
-                </div>
-
-            </div>
-
-
-            <!-- ========================================================
-                 MESSAGES BODY
-            ========================================================= -->
-            <div
-                x-data="{
-                    scrollToBottom() {
-                        $el.scrollTop = $el.scrollHeight
-                    }
-                }"
-                x-init="scrollToBottom()"
-                x-effect="scrollToBottom()"
-                class="flex-1 overflow-y-auto p-4 space-y-4 bg-base-200/20"
-            >
-
-                <div class="divider text-[10px] text-base-content/40 font-semibold uppercase">
-                    Today
-                </div>
-
-
-                @forelse ($messages as $msg)
-
-                    @if ($msg['sender'] === 'user')
-
-                        <!-- =================================================
-                             USER MESSAGE
-                        ================================================== -->
-                        <div
-                            wire:key="{{ $msg['id'] }}"
-                            class="chat chat-start transition-all duration-300"
-                        >
-
-                            <div class="chat-image avatar">
-
-                                <div class="w-8 rounded-full">
-
-                                    <img
-                                        src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRoeZOBBidNgNcGNpV6v4cwHkHPfhp98-J75q0kd2z1Qv9Da0Cimld3WA&s=10"
-                                        alt="User"
-                                    />
-
-                                </div>
-
-                            </div>
-
-
-                            <div class="chat-header text-xs text-base-content/60 mb-1">
-
-                                Mary Atieno
-
-                                <time class="text-[10px] opacity-50 ml-1">
-                                    {{ $msg['time'] }}
-                                </time>
-
-                            </div>
-
-
-                            <div class="chat-bubble chat-bubble-neutral text-xs leading-relaxed space-y-2">
-
-                                @if (!empty($msg['text']))
-
-                                    <p>
-                                        {{ $msg['text'] }}
-                                    </p>
-
-                                @endif
-
-
-                                @if (!empty($msg['attachment']))
-
-                                    <div class="pt-1">
-
-                                        @if (preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $msg['attachment']))
-
-                                            <a
-                                                href="{{ $msg['attachment'] }}"
-                                                target="_blank"
-                                            >
-
-                                                <img
-                                                    src="{{ $msg['attachment'] }}"
-                                                    class="max-w-xs rounded border border-base-300 hover:opacity-90 transition-opacity"
-                                                />
-
-                                            </a>
-
-                                        @else
-
-                                            <a
-                                                href="{{ $msg['attachment'] }}"
-                                                target="_blank"
-                                                class="flex items-center gap-2 underline text-primary font-medium"
-                                            >
-
-                                                <svg
-                                                    class="w-4 h-4"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        stroke-linecap="round"
-                                                        stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                                    />
-                                                </svg>
-
-                                                View Attachment
-
-                                            </a>
-
-                                        @endif
-
-                                    </div>
-
-                                @endif
-
-                            </div>
-
+                <!-- Messages -->
+                <div x-ref="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-base-200/20">
+                    @if ($hasMore)
+                        <div class="text-center">
+                            <button type="button" wire:click="loadEarlier" class="btn btn-xs btn-ghost">Load earlier messages</button>
                         </div>
-
-                    @else
-
-                        <!-- =================================================
-                             ADMIN MESSAGE
-                        ================================================== -->
-                        <div
-                            wire:key="{{ $msg['id'] }}"
-                            class="chat chat-end transition-all duration-300"
-                        >
-
-                            <div class="chat-image avatar">
-
-                                <div class="w-8 rounded-full">
-
-                                    <img
-                                        src="https://media.licdn.com/dms/image/v2/D4E03AQGWlFXHRfXxDw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1674839788606?e=2147483647&v=beta&t=fartG9Fh-rvivnWKxgT4xKADm9jgjdLXxyK3BUjHiOI"
-                                        alt="profile"
-                                    />
-
-                                </div>
-
-                            </div>
-
-
-                            <div class="chat-header text-xs text-base-content/60 mb-1">
-
-                                Support Admin (You)
-
-                                <time class="text-[10px] opacity-50 ml-1">
-                                    {{ $msg['time'] }}
-                                </time>
-
-                            </div>
-
-
-                            <div class="chat-bubble chat-bubble-primary text-white text-xs leading-relaxed space-y-2">
-
-                                @if (!empty($msg['text']))
-
-                                    <p>
-                                        {{ $msg['text'] }}
-                                    </p>
-
-                                @endif
-
-
-                                @if (!empty($msg['attachment']))
-
-                                    <div class="pt-1">
-
-                                        @if (preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $msg['attachment']))
-
-                                            <a
-                                                href="{{ $msg['attachment'] }}"
-                                                target="_blank"
-                                            >
-
-                                                <img
-                                                    src="{{ $msg['attachment'] }}"
-                                                    class="max-w-xs rounded border border-white/20 hover:opacity-90 transition-opacity"
-                                                />
-
-                                            </a>
-
-                                        @else
-
-                                            <a
-                                                href="{{ $msg['attachment'] }}"
-                                                target="_blank"
-                                                class="flex items-center gap-2 underline text-white font-medium"
-                                            >
-
-                                                <svg
-                                                    class="w-4 h-4"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        stroke-linecap="round"
-                                                        stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415-6.585a6 6 0 108.486 8.486L20.5 13"
-                                                    />
-                                                </svg>
-
-                                                View Attachment
-
-                                            </a>
-
-                                        @endif
-
-                                    </div>
-
-                                @endif
-
-                            </div>
-
-
-                            <div class="chat-footer text-[10px] opacity-50 mt-1">
-                                Delivered
-                            </div>
-
-                        </div>
-
                     @endif
 
-                @empty
-
-                    <!-- =================================================
-                         EMPTY CHAT STATE
-                    ================================================== -->
-                    <div class="text-center text-xs text-base-content/40 py-8">
-
-                        <div class="flex justify-center mb-3">
-
-                            <svg
-                                class="w-10 h-10 opacity-30"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="1.5"
-                                    d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.5 9.5 0 01-4.086-.915L3 20l1.086-4.342A7.95 7.95 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                                />
-                            </svg>
-
+                    @php $lastDate = null; @endphp
+                    @forelse ($messages as $msg)
+                        @if ($msg['date'] !== $lastDate)
+                            <div class="divider text-[10px] text-base-content/40 font-semibold uppercase" wire:key="d_{{ $msg['id'] }}">
+                                {{ $msg['date'] === now('Africa/Nairobi')->format('D, j M Y') ? 'Today' : $msg['date'] }}
+                            </div>
+                            @php $lastDate = $msg['date']; @endphp
+                        @endif
+                        <x-chat.bubble :msg="$msg" :mine="$msg['sender'] === 'admin'" />
+                    @empty
+                        <div class="text-center text-xs text-base-content/40 py-8">
+                            <p>No messages yet.</p>
+                            <p class="mt-1">Send a reply to start the conversation.</p>
                         </div>
+                    @endforelse
 
-                        <p>
-                            No messages yet.
-                        </p>
-
-                        <p class="mt-1">
-                            Send a reply to start the conversation.
-                        </p>
-
+                    <div x-show="typing" x-cloak class="chat chat-start">
+                        <div class="chat-bubble chat-bubble-neutral"><span class="loading loading-dots loading-xs"></span></div>
                     </div>
+                </div>
 
-                @endforelse
+                <!-- Composer -->
+                <div class="p-3 bg-base-100 border-t border-base-200 space-y-2">
+                    @if ($attachment)
+                        <div class="flex items-center justify-between bg-base-200 px-3 py-1.5 rounded-lg text-xs">
+                            <span class="truncate max-w-xs font-mono text-base-content/80">{{ $attachment->getClientOriginalName() }}</span>
+                            <button type="button" wire:click="$set('attachment', null)" class="text-error font-bold text-xs hover:underline">Remove</button>
+                        </div>
+                    @endif
+                    @error('attachment') <p class="text-error text-xs">{{ $message }}</p> @enderror
 
-            </div>
-
-
-            <!-- ========================================================
-                 INPUT FOOTER
-            ========================================================= -->
-            <div class="p-3 bg-base-100 border-t border-base-200 space-y-2">
-
-                <!-- Attachment Preview -->
-                @if ($attachment)
-
-                    <div class="flex items-center justify-between bg-base-200 px-3 py-1.5 rounded-lg text-xs">
-
-                        <span class="truncate max-w-xs font-mono text-base-content/80">
-                            {{ $attachment->getClientOriginalName() }}
-                        </span>
-
-                        <button
-                            type="button"
-                            wire:click="$set('attachment', null)"
-                            class="text-error font-bold text-xs hover:underline"
-                        >
-                            Remove
-                        </button>
-
-                    </div>
-
-                @endif
-
-
-                <!-- Message Form -->
-                <form
-                    wire:submit.prevent="sendAdminReply"
-                    class="flex items-center gap-2"
-                >
-
-                    <!-- File Attachment -->
-                    <label
-                        class="btn btn-ghost btn-circle btn-sm text-base-content/60 hover:text-primary cursor-pointer"
-                        title="Attach File"
-                    >
+                    <form wire:submit.prevent="sendAdminReply" class="flex items-center gap-2">
+                        <label class="btn btn-ghost btn-circle btn-sm text-base-content/60 hover:text-primary cursor-pointer" title="Attach file">
+                            <input type="file" wire:model="attachment" class="hidden" />
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                        </label>
 
                         <input
-                            type="file"
-                            wire:model="attachment"
-                            class="hidden"
+                            wire:model="adminReply"
+                            x-on:input="notifyTyping()"
+                            x-on:focus="$wire.markRead()"
+                            type="text"
+                            placeholder="Type your reply as support..."
+                            autocomplete="off"
+                            class="input input-sm input-bordered flex-1 text-xs focus:outline-none focus:border-primary"
                         />
 
-                        <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                            />
-                        </svg>
-
-                    </label>
-
-
-                    <!-- Message Input -->
-                    <input
-                        wire:model="adminReply"
-                        type="text"
-                        placeholder="Type your reply as support admin..."
-                        class="input input-sm input-bordered flex-1 text-xs focus:outline-none focus:border-primary"
-                    />
-
-
-                    <!-- Send Button -->
-                    <button
-                        type="submit"
-                        class="btn btn-sm btn-primary text-white font-semibold gap-1"
-                        wire:loading.attr="disabled"
-                    >
-
-                        <span
-                            wire:loading.remove
-                            wire:target="sendAdminReply"
-                        >
-                            Send
-                        </span>
-
-
-                        <span
-                            wire:loading
-                            wire:target="sendAdminReply"
-                            class="loading loading-spinner loading-xs"
-                        ></span>
-
-
-                        <svg
-                            wire:loading.remove
-                            wire:target="sendAdminReply"
-                            class="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 19l9-7-9-7-9 7 9 7zm0 0v-8"
-                            />
-                        </svg>
-
-                    </button>
-
-                </form>
-
-            </div>
-
+                        <button type="submit" class="btn btn-sm btn-primary text-white font-semibold gap-1" wire:loading.attr="disabled">
+                            <span wire:loading.remove wire:target="sendAdminReply">Send</span>
+                            <span wire:loading wire:target="sendAdminReply" class="loading loading-spinner loading-xs"></span>
+                        </button>
+                    </form>
+                </div>
+            @endif
         </div>
-
     </div>
 </div>
-

@@ -1,5 +1,8 @@
 <x-layouts::app>
-    <div class="bg-base-100 flex h-screen overflow-hidden text-base-content">
+    <div class="bg-base-100 flex h-screen overflow-hidden text-base-content"
+         x-data="chatNotifier({ channel: 'App.Models.User.{{ auth()->id() }}', unread: {{ (int) auth()->user()->unreadNotifications()->where('data->kind', 'chat')->count() }} })"
+         @chat-unread.window="unread = $event.detail.count">
+        <x-chat.notifier-toast />
 
         <!-- Sidebar using DaisyUI base colors -->
         <aside class="bg-base-200 flex h-screen w-64 flex-col justify-between p-4 shrink-0 border-r border-base-300" id="sidebar">
@@ -30,6 +33,7 @@
 </svg>
 
                 <span class=" dark:text-white ">View Tickets</span>
+                <span x-show="unread > 0" x-cloak x-text="unread > 99 ? '99+' : unread" class="badge badge-primary badge-sm text-white ml-auto" title="Unread chat messages"></span>
             </a>
         </li>
 
@@ -45,12 +49,37 @@
                 </a>
         </li> --}}
     </ul>
+
+    <div class="mt-5 mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-base-content/60">Knowledge Base</div>
+    <ul class="space-y-1">
+        <li>
+            <a href="{{ url('/disi-solves/search') }}"
+               class="flex items-center gap-3 rounded-btn px-4 py-2.5 text-sm font-medium transition-all hover:bg-base-300 text-base-content dark:text-white">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <span>Search Solutions</span>
+            </a>
+        </li>
+        <li>
+            <a href="{{ url('/disi-solves/dashboard') }}"
+               class="flex items-center gap-3 rounded-btn px-4 py-2.5 text-sm font-medium transition-all hover:bg-base-300 text-base-content dark:text-white">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                <span>DISI Solves</span>
+            </a>
+        </li>
+    </ul>
 </nav>
             </div>
 
 
             <div class="border-base-300 border-t pt-4 space-y-1">
                 <ul class="space-y-1 text-sm font-medium">
+                    <li>
+                        <a wire:navigate href="{{ route('profile') }}"
+                           class="flex items-center gap-3 rounded-btn px-4 py-2 transition-colors {{ request()->routeIs('profile') ? 'bg-primary text-primary-content shadow-sm' : 'hover:bg-base-300 text-base-content' }}">
+                            <div class="avatar"><div class="w-5 rounded-full"><img src="{{ auth()->user()->avatar_url }}" alt="" /></div></div>
+                            <span>My Profile</span>
+                        </a>
+                    </li>
                     <li>
                         <a wire:navigate href="{{ route("help-page") }}"
                            class="flex items-center gap-3 rounded-btn px-4 py-2 transition-colors {{ request()->routeIs('help-page') ? 'bg-primary text-primary-content shadow-sm' : 'hover:bg-base-300 text-base-content' }}">
@@ -59,10 +88,10 @@
                         </a>
                     </li>
                     <li>
-                        <a href=""
+                        <a href="{{ route('ict-dashboard') }}"
                            class="flex items-center gap-3 rounded-btn px-4 py-2 transition-colors {{ request()->routeIs('support') ? 'bg-primary text-primary-content shadow-sm' : 'hover:bg-base-300 text-base-content' }}">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                            <span>Support</span>
+                            <span>Support Team Portal</span>
                         </a>
                     </li>
                 </ul>

@@ -52,9 +52,15 @@ class HandleInertiaRequests extends Middleware
                     'username' => $request->user()->username,
                     'first_name' => $request->user()->first_name,
                     'last_name' => $request->user()->last_name,
-                    'role' => $request->user()->role
+                    'role' => $request->user()->role,
+                    'avatar_url' => $request->user()->avatar_url,
+                    'has_picture' => (bool) $request->user()->profile_picture,
                     // Add any other user fields your React frontend needs
                 ] : null,
+            ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
             ],
             //
         ];

@@ -13,8 +13,14 @@ class ChatMessage extends Model
         'sender_type',
         'sender_id',
         'message',
-        'attachment_path'
+        'attachment_path',
+        'read_at',
     ];
+
+    protected function casts(): array
+    {
+        return ['read_at' => 'datetime'];
+    }
 
     public function chat()
     {

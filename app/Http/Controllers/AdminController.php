@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Inertia\Inertia;
+use App\Models\Answer;
 use App\Models\Question;
 use App\Models\SolveUser;
 use Illuminate\Http\Request;
@@ -103,16 +104,26 @@ public function reject_question(Request $request, $id)
 
 public function detail_page(Request $request, $id)
 {
-   $questionDetail = Question::with([
+   $user = $request->user('solves');
+    $isAdmin = $user->role === 'admin';
+
+    $questionDetail = Question::with([
         'author',
-        // Include 'author_id' (or 'user_id') so Eloquent can resolve the relation
-        'answer.author'
+        // Admins see every answer; everyone else sees approved ones plus their own.
+        'answer' => fn ($q) => $q
+            ->when(! $isAdmin, fn ($q) => $q->where(fn ($q) => $q
+                ->where('status', 'approved')
+                ->orWhere('created_by', $user->id)))
+            ->oldest(),
+        'answer.author',
     ])->findOrFail($id);
 
-    // dd($questionDetail->answer[0]->author->first_name);
+    // Unapproved questions are only visible to their author and admins.
+    abort_unless(
+        $isAdmin || $questionDetail->status === 'approved' || $questionDetail->created_by === $user->id,
+        403
+    );
 
-    // dd($questionDetail);
-    // Increment view count
     $questionDetail->increment('views');
 
     return Inertia::render('QuestionDetail', [
@@ -202,6 +213,15 @@ public function render_users_page()
     public function destroy($id)
     {
         $user = SolveUser::findOrFail($id);
+
+        if ($user->id === auth('solves')->id()) {
+            return redirect()->back()->with('error', 'You cannot delete your own account.');
+        }
+
+        // Answers hold a foreign key to the author, so remove accounts that have posted answers last.
+        if (Answer::where('created_by', $user->id)->exists()) {
+            return redirect()->back()->with('error', 'This user has posted answers. Delete those answers first, then remove the account.');
+        }
 
         $user->delete();
 

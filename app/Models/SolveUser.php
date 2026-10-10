@@ -8,7 +8,7 @@ use Illuminate\Notifications\Notifiable;
 
 class SolveUser extends Authenticatable
 {
-    use HasFactory , Notifiable;
+    use HasFactory , Notifiable, \App\Models\Concerns\HasAvatar;
     protected $connection = 'mysql_solves';
     protected $table = 'solve_users';
     //
@@ -22,6 +22,7 @@ class SolveUser extends Authenticatable
         'supervisor_type',
         'first_name',
         'last_name',
+        'profile_picture',
     ];
 
     protected $hidden = [
@@ -51,7 +52,7 @@ class SolveUser extends Authenticatable
 
 
     public function answer(){
-        $this->hasMany(Answer::class , "created_by");
+        return $this->hasMany(Answer::class , "created_by");
     }
 
 

@@ -7,13 +7,16 @@ import {
   Home,
   Search,
   Plus,
-  BarChart3,
   Users,
   History,
+  UserCircle,
+  Ticket,
+  Headset,
   LogOut
 } from "lucide-react";
 
 
+import { useEffect, useState } from "react";
 import {Form, Link, usePage} from "@inertiajs/react"
 import { PageProps } from "@/Pages/Dashboard";
 
@@ -31,7 +34,37 @@ export function Sidebar() {
             ? "bg-lime-green/10 text-dark-green dark:text-lime-green font-medium"
             : ""
         } ${extra}`;
+  const flash = (usePage().props as { flash?: { success?: string | null; error?: string | null } }).flash;
+  const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  // Surface server flash messages (deleted / approved / errors) as a dismissing toast.
+  useEffect(() => {
+    const next = flash?.error
+      ? { kind: "error" as const, text: flash.error }
+      : flash?.success
+      ? { kind: "success" as const, text: flash.success }
+      : null;
+    setNotice(next);
+    if (!next) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [flash?.success, flash?.error, currentUrl]);
+
   return (
+    <>
+    {notice && (
+      <div
+        role="status"
+        onClick={() => setNotice(null)}
+        className={`fixed right-4 top-4 z-50 max-w-sm cursor-pointer rounded-lg border px-4 py-3 text-sm shadow-lg ${
+          notice.kind === "error"
+            ? "border-red-200 bg-red-50 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+            : "border-green-200 bg-green-50 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+        }`}
+      >
+        {notice.text}
+      </div>
+    )}
     <div className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border shadow-lg z-30">
       {/* Logo Section */}
       <div className="flex items-center justify-between p-6 border-b border-border">
@@ -59,11 +92,9 @@ export function Sidebar() {
       {/* User Info */}
       <div className="p-5 border-b border-border">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-lime-green rounded-full flex items-center justify-center shrink-0">
-            <span className="text-dark-green font-semibold text-sm">
-              {user?.first_name && user.first_name[0].toUpperCase()}{user?.last_name && user.last_name[0].toUpperCase()}
-            </span>
-          </div>
+          <Link href="/disi-solves/profile" title="Edit profile" className="shrink-0">
+            <img src={user?.avatar_url} alt="Profile" className="w-8 h-8 rounded-full object-cover" />
+          </Link>
           <div>
             <p className="font-medium text-sm text-foreground mb-1">
               {user?.first_name} {user?.last_name}
@@ -88,29 +119,17 @@ export function Sidebar() {
         </Button>
         </Link>
 
-        <Link href={"/disi-solves/dashboard"} className="block">
+        <Link href={"/disi-solves/search"} className="block">
         <Button
           variant="ghost"
-          className={navButtonClass("/disi-solves/dashboard/")}
-          data-testid="button-browse-all"
+          className={navButtonClass("/disi-solves/search")}
+          data-testid="button-search"
         >
           <Search className="mr-3 h-4 w-4" />
-          Browse All
+          Search Issues
         </Button>
         </Link>
 
-
-        {
-            user?.role === "admin" &&
-        <Button
-          variant="ghost"
-          className="w-full justify-start h-11 px-4"
-          data-testid="button-analytics"
-        >
-          <BarChart3 className="mr-3 h-4 w-4" />
-          Analytics
-        </Button>
-}
 
     {
         user?.role === "admin" &&
@@ -138,6 +157,17 @@ export function Sidebar() {
         </Button>
         </Link>
 
+        <Link href="/disi-solves/profile" className="block w-full">
+        <Button
+          variant="ghost"
+          className={navButtonClass("/disi-solves/profile")}
+        >
+          <UserCircle className="mr-3 h-4 w-4" />
+          My Profile
+        </Button>
+        </Link>
+
+        <Link href="/disi-solves/dashboard?raise=1" className="block w-full">
         <Button
           variant="ghost"
           className="w-full justify-start h-11 px-4 bg-lime-green/10 text-lime-green hover:bg-lime-green/20"
@@ -146,10 +176,31 @@ export function Sidebar() {
           <Plus className="mr-3 h-4 w-4" />
           Raise Issue
         </Button>
+        </Link>
       </nav>
 
       {/* Logout */}
       <div className="absolute bottom-4 left-4 right-4">
+        {/* Jump to the other module (separate login, so these are full page loads) */}
+        <div className="mb-3 border-t border-border pt-3">
+          <p className="mb-1 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Other modules
+          </p>
+          <a
+            href="/tickets/create"
+            className="flex h-10 items-center rounded-md px-4 text-sm text-foreground hover:bg-muted"
+          >
+            <Ticket className="mr-3 h-4 w-4" />
+            Support Tickets
+          </a>
+          <a
+            href="/support/dashboard"
+            className="flex h-10 items-center rounded-md px-4 text-sm text-foreground hover:bg-muted"
+          >
+            <Headset className="mr-3 h-4 w-4" />
+            Support Team Portal
+          </a>
+        </div>
         <Form method="post" action={"/disi-solves/auth/logout"}>
         <Button
         type="submit"
@@ -162,5 +213,6 @@ export function Sidebar() {
         </Form>
       </div>
     </div>
+    </>
   );
 }

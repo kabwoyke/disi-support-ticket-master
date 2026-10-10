@@ -17,6 +17,8 @@ export interface User {
   last_name?: string;
   username: string;
   role: string;
+  avatar_url?: string;
+  has_picture?: boolean;
 }
 
 export interface QuestionData {
@@ -32,6 +34,7 @@ export interface QuestionData {
   is_final: boolean;
   attachment?: string | null;
   author?: User;
+  answer_count?: number;
 }
 
 export interface PageProps {
@@ -47,15 +50,20 @@ export interface PageProps {
   };
   userCount: number;
   pendingApprovals: number;
+  totalQuestions?: number;
+  resolutionRate?: number;
   [key: string]: unknown;
 }
 
 export default function Dashboard() {
-  const { solves, questions = [], userCount, pendingApprovals = 0, filters = {} } = usePage<PageProps>().props;
+  const { solves, questions = [], userCount, pendingApprovals = 0, totalQuestions = 0, resolutionRate = 0, filters = {} } = usePage<PageProps>().props;
   const user = solves?.user;
 
   // Modal State
-  const [showRaiseIssueModal, setShowRaiseIssueModal] = useState(false);
+  // The sidebar's "Raise Issue" button links here with ?raise=1 to open the modal.
+  const [showRaiseIssueModal, setShowRaiseIssueModal] = useState(
+    () => new URLSearchParams(window.location.search).has('raise')
+  );
   const [showAdminPostModal, setShowAdminPostModal] = useState(false);
 
   // Form Filters State
@@ -169,7 +177,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Questions</p>
-                      <p className="text-3xl font-bold text-foreground">{questions.length}</p>
+                      <p className="text-3xl font-bold text-foreground">{totalQuestions}</p>
                     </div>
                     <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
                       <TrendingUp className="text-blue-600 dark:text-blue-400 h-6 w-6" />
@@ -211,7 +219,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Resolution Rate</p>
-                      <p className="text-3xl font-bold text-foreground">100%</p>
+                      <p className="text-3xl font-bold text-foreground">{resolutionRate}%</p>
                     </div>
                     <div className="w-12 h-12 bg-lime-100 dark:bg-lime-900/20 rounded-lg flex items-center justify-center">
                       <CheckCircle className="text-lime-600 dark:text-lime-400 h-6 w-6" />
@@ -317,10 +325,17 @@ export default function Dashboard() {
                       category: question.category,
                       status: question.status,
                       createdAt: question.created_at,
-                      authorName: question.author
-                        ? `${question.author.first_name ?? ''} ${question.author.last_name ?? ''}`.trim() || question.author.username
-                        : 'Anonymous',
-                    } as any}
+                      views: question.views,
+                      answerCount: question.answer_count ?? 0,
+                      attachment: question.attachment ?? undefined,
+                      author: question.author
+                        ? {
+                            firstName: question.author.first_name ?? undefined,
+                            lastName: question.author.last_name ?? undefined,
+                            username: question.author.username,
+                          }
+                        : undefined,
+                    }}
                   />
                 ))
               ) : (

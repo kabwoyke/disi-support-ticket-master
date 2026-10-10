@@ -8,7 +8,7 @@ use Illuminate\Notifications\Notifiable;
 
 class SupportTeam extends Authenticatable
 {
-    use Notifiable;
+    use Notifiable, \App\Models\Concerns\HasAvatar;
     //
 
     protected $fillable = [

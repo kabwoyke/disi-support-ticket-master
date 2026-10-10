@@ -75,7 +75,7 @@ return [
         'collation' => 'utf8mb4_unicode_ci',
         'prefix' => '',
         'strict' => true,
-        'engine' => null,
+        'engine' => 'InnoDB',
     ],
 
         'mariadb' => [

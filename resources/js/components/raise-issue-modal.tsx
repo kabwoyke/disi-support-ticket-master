@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, usePage } from "@inertiajs/react";
 import {
   Dialog,
@@ -36,6 +36,31 @@ export function RaiseIssueModal({ open, onOpenChange }: RaiseIssueModalProps) {
     created_by:user?.id,
     attachment: null as File | null,
   });
+
+  // Suggest existing issues while the title is being typed (debounced, cancelled on change).
+  const [similar, setSimilar] = useState<{ id: number; title: string; solved: boolean }[]>([]);
+
+  useEffect(() => {
+    const title = data.title.trim();
+    if (!open || title.length < 4) {
+      setSimilar([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/disi-solves/search/similar?q=${encodeURIComponent(title)}`, {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      })
+        .then((r) => (r.ok ? r.json() : []))
+        .then(setSimilar)
+        .catch(() => {});
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [data.title, open]);
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,6 +123,30 @@ export function RaiseIssueModal({ open, onOpenChange }: RaiseIssueModalProps) {
               className="h-11"
             />
             {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
+
+            {/* Existing issues that look like this one, so people can avoid duplicates */}
+            {similar.length > 0 && (
+              <div className="rounded-lg border border-lime-green/40 bg-lime-green/5 p-3">
+                <p className="mb-2 text-xs font-semibold text-foreground">
+                  Similar issues already exist. Does one of these help?
+                </p>
+                <ul className="space-y-1">
+                  {similar.map((s) => (
+                    <li key={s.id}>
+                      <a
+                        href={`/disi-solves/${s.id}/details`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        {s.title}
+                      </a>
+                      {s.solved && <span className="ml-2 text-xs text-green-600">solved</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* Category */}

@@ -7,6 +7,7 @@
  */
 
 import './echo';
+import './chat-room';
 
 import { createInertiaApp } from '@inertiajs/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
