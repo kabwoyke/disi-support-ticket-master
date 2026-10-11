@@ -18,12 +18,12 @@ if /i not "%CONFIRM%"=="YES" (
 :: separate solves database must be wiped too or its migrations fail
 :: with "table already exists".
 echo.
-echo [1/9] Wiping solves database (mysql_solves)...
+echo [1/10] Wiping solves database (mysql_solves)...
 call php artisan db:wipe --database=mysql_solves --force
 if errorlevel 1 goto :fail
 
 echo.
-echo [2/9] Running migrations from scratch...
+echo [2/10] Running migrations from scratch...
 call php artisan migrate:fresh --force
 if errorlevel 1 goto :fail
 
@@ -31,37 +31,42 @@ if errorlevel 1 goto :fail
 ::   departments -> categories -> equipments (needs categories)
 ::   -> desks -> support_teams (needs categories) -> solve_users
 echo.
-echo [3/9] DepartmentSeeder...
+echo [3/10] DepartmentSeeder...
 call php artisan db:seed --class=DepartmentSeeder --force
 if errorlevel 1 goto :fail
 
 echo.
-echo [4/9] CategorySeeder...
+echo [4/10] CategorySeeder...
 call php artisan db:seed --class=CategorySeeder --force
 if errorlevel 1 goto :fail
 
 echo.
-echo [5/9] EquipmentSeeder...
+echo [5/10] EquipmentSeeder...
 call php artisan db:seed --class=EquipmentSeeder --force
 if errorlevel 1 goto :fail
 
 echo.
-echo [6/9] DeskSeeder...
+echo [6/10] DeskSeeder...
 call php artisan db:seed --class=DeskSeeder --force
 if errorlevel 1 goto :fail
 
 echo.
-echo [7/9] SupportTeamSeeder...
+echo [7/10] SupportTeamSeeder...
 call php artisan db:seed --class=SupportTeamSeeder --force
 if errorlevel 1 goto :fail
 
 echo.
-echo [8/9] SolveUserSeeder...
+echo [8/10] SolveUserSeeder...
 call php artisan db:seed --class=SolveUserSeeder --force
 if errorlevel 1 goto :fail
 
 echo.
-echo [9/9] DatabaseSeeder (test@example.com admin login user)...
+echo [9/10] UserSeeder (ticket requester accounts, e.g. test@example.com)...
+call php artisan db:seed --class=UserSeeder --force
+if errorlevel 1 goto :fail
+
+echo.
+echo [10/10] DatabaseSeeder (calls UserSeeder - idempotent)...
 call php artisan db:seed --class=DatabaseSeeder --force
 if errorlevel 1 goto :fail
 

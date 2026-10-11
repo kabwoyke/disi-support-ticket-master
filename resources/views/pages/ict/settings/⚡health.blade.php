@@ -13,8 +13,50 @@ new class extends Component
 
     public function mount(): void
     {
-        $this->operatingSystem = php_uname('s') . ' ' . php_uname('r');
+        $this->operatingSystem = $this->describeOs();
         $this->checkHealth();
+    }
+
+    /** "Windows 11 (10.0.26200)" instead of php_uname's bare "Windows NT 10.0". */
+    protected function describeOs(): string
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $build = (int) (explode('.', php_uname('v'))[2] ?? 0);
+            // Windows 11 still reports NT 10.0; builds from 22000 are Windows 11.
+            $name = $build >= 22000 ? 'Windows 11' : 'Windows ' . php_uname('r');
+
+            return $name . ($build ? " (build {$build})" : '');
+        }
+
+        return php_uname('s') . ' ' . php_uname('r');
+    }
+
+    /**
+     * TCP probe that behaves the same on Windows and Linux.
+     *
+     * - 0.0.0.0 / :: are bind addresses, not connectable on Windows, so they map to loopback.
+     * - "localhost" can resolve to ::1 first on Windows while the server only listens on
+     *   IPv4 (and vice versa), so both loopback addresses are tried.
+     */
+    protected function probe(?string $host, int $port, float $timeout = 1.5): bool
+    {
+        $host = trim((string) $host, '[] ');
+
+        $targets = in_array(strtolower($host), ['', '0.0.0.0', '::', 'localhost', '127.0.0.1', '::1'], true)
+            ? ['127.0.0.1', '[::1]']
+            : [$host];
+
+        foreach ($targets as $target) {
+            $socket = @stream_socket_client("tcp://{$target}:{$port}", $errno, $errstr, $timeout);
+
+            if (is_resource($socket)) {
+                fclose($socket);
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function checkHealth(): void
@@ -22,14 +64,16 @@ new class extends Component
         // 1. Check Database
         try {
             $startTime = microtime(true);
-            DB::connection()->getPdo();
+            $connection = DB::connection();
+            $connection->getPdo();
+            $connection->select('select 1'); // proves the DB actually answers, not just that a handle exists
             $latency = round((microtime(true) - $startTime) * 1000, 2);
 
             $this->dbHealth = [
                 'status' => 'ok',
                 'message' => 'Database Connected',
                 'latency' => $latency . ' ms',
-                'driver' => DB::connection()->getDriverName(),
+                'driver' => $connection->getDriverName(),
             ];
         } catch (\Throwable $e) {
             $this->dbHealth = [
@@ -40,48 +84,39 @@ new class extends Component
             ];
         }
 
- // 2. Check HTTP Server
-try {
-    $url = config('app.url', 'http://localhost:8000');
-    $parsedUrl = parse_url($url);
+        // 2. Check HTTP Server (the host/port this page was actually served from)
+        try {
+            $host = request()->getHost() ?: '127.0.0.1';
+            $port = (int) (request()->getPort() ?: (request()->isSecure() ? 443 : 80));
 
-    $host = $parsedUrl['host'] ?? '127.0.0.1';
-    $port = $parsedUrl['port'] ?? ($parsedUrl['scheme'] === 'https' ? 443 : 80);
-
-    // Non-blocking socket check to prevent single-thread server deadlocks
-    $connection = @fsockopen($host, $port, $errno, $errstr, 1);
-
-    if (is_resource($connection)) {
-        fclose($connection);
-        $this->httpHealth = [
-            'status'  => 'ok',
-            'code'    => 200,
-            'message' => "Server listening on {$host}:{$port}",
-        ];
-    } else {
-        $this->httpHealth = [
-            'status'  => 'error',
-            'code'    => 500,
-            'message' => "Port {$port} unreachable on {$host}",
-        ];
-    }
-} catch (\Throwable $e) {
-    $this->httpHealth = [
-        'status'  => 'error',
-        'code'    => 500,
-        'message' => 'HTTP Check Failed: ' . $e->getMessage(),
-    ];
-}
+            if ($this->probe($host, $port)) {
+                $this->httpHealth = [
+                    'status'  => 'ok',
+                    'code'    => 200,
+                    'message' => "Server listening on {$host}:{$port}",
+                ];
+            } else {
+                $this->httpHealth = [
+                    'status'  => 'error',
+                    'code'    => 500,
+                    'message' => "Port {$port} unreachable on {$host}",
+                ];
+            }
+        } catch (\Throwable $e) {
+            $this->httpHealth = [
+                'status'  => 'error',
+                'code'    => 500,
+                'message' => 'HTTP Check Failed: ' . $e->getMessage(),
+            ];
+        }
 
         // 3. Check Laravel Reverb Server
         try {
-            $reverbHost = config('reverb.servers.reverb.host', '127.0.0.1');
-            $reverbPort = config('reverb.servers.reverb.port', 8080);
+            // Prefer the client-facing host/port from .env; the server bind host is often 0.0.0.0.
+            $reverbHost = config('broadcasting.connections.reverb.options.host') ?: config('reverb.servers.reverb.host', '127.0.0.1');
+            $reverbPort = (int) (config('broadcasting.connections.reverb.options.port') ?: config('reverb.servers.reverb.port', 8080));
 
-            $connection = @fsockopen($reverbHost, $reverbPort, $errno, $errstr, 2);
-
-            if (is_resource($connection)) {
-                fclose($connection);
+            if ($this->probe($reverbHost, $reverbPort, 2)) {
                 $this->reverbHealth = [
                     'status' => 'ok',
                     'message' => "Running on {$reverbHost}:{$reverbPort}",
