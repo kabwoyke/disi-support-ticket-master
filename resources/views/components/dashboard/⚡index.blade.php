@@ -49,26 +49,23 @@ new class extends Component
             ->where('teamId', $supportId)
             ->first();
 
-        if (!$ticketAssignment) {
+        $ticket = Ticket::find($ticketId);
+
+        if (!$ticketAssignment || !$ticket || $ticket->isChatClosed()) {
             return;
         }
 
-        DB::transaction(function () use ($ticketId, $ticketAssignment, $supportId) {
+        DB::transaction(function () use ($ticket, $ticketAssignment, $supportId) {
             // 1. Log resolution details
             TicketResolution::create([
                 'ticket_assignment_id' => $ticketAssignment->id,
                 'resolved_by'          => $supportId,
             ]);
 
-            // 2. Mark ticket assignment as completed
-            $ticketAssignment->update([
-                'status' => 'RESOLVED',
-            ]);
-
-            // 3. Update the main Ticket status to RESOLVED
-            Ticket::where('id', $ticketId)->update([
-                'status' => 'RESOLVED',
-            ]);
+            // 2. Update the ticket. The model's "updated" hook marks the
+            //    assignment resolved, frees the agent's capacity and pulls
+            //    the next waiting ticket from the queue.
+            $ticket->update(['status' => 'RESOLVED']);
         });
 
         $this->successMessage = "Ticket #{$ticketId} successfully marked as resolved.";

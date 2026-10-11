@@ -28,6 +28,27 @@ protected function casts(): array
     return ['attachment_url' => 'array'];
 }
 
+public const CLOSED_STATUSES = ['RESOLVED', 'CLOSED'];
+
+protected static function booted(): void
+{
+    // Whenever a ticket reaches a final state, free the agent's slot
+    // (covers the dashboard resolve button and Filament edits/bulk close).
+    static::updated(function (Ticket $ticket) {
+        if ($ticket->wasChanged('status')
+            && in_array($ticket->status, self::CLOSED_STATUSES, true)
+            && ! in_array($ticket->getOriginal('status'), self::CLOSED_STATUSES, true)) {
+            app(\App\Services\TicketAssigner::class)->release($ticket);
+        }
+    });
+}
+
+/** Resolved/closed tickets keep their chat history but accept no new messages. */
+public function isChatClosed(): bool
+{
+    return in_array($this->status, self::CLOSED_STATUSES, true);
+}
+
 public function category(): BelongsTo
 {
     return $this->belongsTo(TicketCategory::class, 'categoryId');

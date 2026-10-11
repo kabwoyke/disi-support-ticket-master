@@ -172,6 +172,15 @@ new class extends Component
             return;
         }
 
+        // Resolved/closed tickets are read-only.
+        $ticket = Ticket::find($this->ticket);
+        abort_unless($ticket && (int) $ticket->userId === (int) auth()->id(), 403);
+
+        if ($ticket->isChatClosed()) {
+            $this->reset(['userChat', 'attachment']);
+            return;
+        }
+
         $chat = Chat::firstOrCreate([
             'id' => $this->ticket,
         ], [
@@ -272,6 +281,11 @@ new class extends Component
             </div>
 
             <!-- Composer -->
+            @if ($ticketDetail?->isChatClosed())
+            <div class="p-4 bg-base-200/60 border-t border-base-200 text-center text-xs text-base-content/60">
+                This ticket has been {{ strtolower($ticketDetail->status) }}. The conversation is now read-only.
+            </div>
+            @else
             <div class="p-3 bg-base-100 border-t border-base-200 space-y-2">
                 @if ($attachment)
                     <div class="flex items-center justify-between bg-base-200 px-3 py-1.5 rounded-lg text-xs">
@@ -303,6 +317,7 @@ new class extends Component
                     </button>
                 </form>
             </div>
+            @endif
         </div>
     </div>
 </div>

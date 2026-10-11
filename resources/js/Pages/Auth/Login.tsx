@@ -3,14 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Shield, Users, TrendingUp, ArrowLeft, Home } from "lucide-react";
+import { Shield, Users, TrendingUp, ArrowLeft, Home, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import '../../../css/solves.css';
-import { Form } from "@inertiajs/react";
+import { Form, usePage } from "@inertiajs/react";
 
 import disilogo from "../../images/DISI-logo.png"
 
 export default function Login() {
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const flash = (usePage().props as { flash?: { success?: string | null; error?: string | null } }).flash;
 
   // Go back if there is history to return to, otherwise fall back to the home page.
   const goBack = () => {
@@ -65,39 +66,71 @@ export default function Login() {
               </p>
             </CardHeader>
             <CardContent>
-              <Form method="post" action={"/disi-solves/auth/login"} className="space-y-4">
-                <div>
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    name="username"
-                    type="text"
-                    value={loginForm.username}
-                    onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                    required
-                    data-testid="input-username"
-                  />
+              {flash?.success && (
+                <div role="status" className="mb-4 flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/40 dark:text-green-200" data-testid="alert-success">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> <span>{flash.success}</span>
                 </div>
-                <div>
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                    required
-                    data-testid="input-password"
-                  />
+              )}
+              {flash?.error && (
+                <div role="alert" className="mb-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-200">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{flash.error}</span>
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-lime-green text-dark-green hover:bg-lime-green/90 font-bold text-lg py-6"
-                //   disabled={loginMutation.isPending}
-                  data-testid="button-login"
-                >
-                 Sign In
-                </Button>
+              )}
+              <Form
+                method="post"
+                action={"/disi-solves/auth/login"}
+                className="space-y-4"
+                onSuccess={() => setLoginForm((f) => ({ ...f, password: "" }))}
+                onError={() => setLoginForm((f) => ({ ...f, password: "" }))}
+              >
+                {({ errors, processing }) => (
+                  <>
+                    {(errors.username || errors.password) && (
+                      <div role="alert" className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-200" data-testid="alert-error">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>{errors.username ?? errors.password}</span>
+                      </div>
+                    )}
+                    <div>
+                      <Label htmlFor="username">Username</Label>
+                      <Input
+                        id="username"
+                        name="username"
+                        type="text"
+                        autoComplete="username"
+                        value={loginForm.username}
+                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                        aria-invalid={!!errors.username}
+                        className={errors.username ? "border-red-500" : ""}
+                        required
+                        data-testid="input-username"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                        aria-invalid={!!errors.password}
+                        className={errors.password ? "border-red-500" : ""}
+                        required
+                        data-testid="input-password"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={processing}
+                      className="w-full bg-lime-green text-dark-green hover:bg-lime-green/90 font-bold text-lg py-6"
+                      data-testid="button-login"
+                    >
+                      {processing ? (<><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Signing in...</>) : "Sign In"}
+                    </Button>
+                  </>
+                )}
               </Form>
             </CardContent>
           </Card>

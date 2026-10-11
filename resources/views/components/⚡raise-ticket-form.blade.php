@@ -10,7 +10,10 @@ use App\Models\Equipment;
 use App\Models\SupportTeam;
 use App\Models\TicketAssignment;
 use App\Models\Desk;
-use App\Notifications\NotifyTicket;
+use App\Services\TicketAssigner;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+
 new class extends Component
 {
     use WithFileUploads;
@@ -40,6 +43,9 @@ new class extends Component
     public array $attachments = [];
 
 
+    // Optional: the support agent the user would like to handle the ticket.
+    public string $preferredAgent = '';
+
     public $name = "";
 
 
@@ -50,6 +56,7 @@ new class extends Component
     {
 
         $this->equipment = '';
+        $this->preferredAgent = '';
     }
 
 
@@ -81,34 +88,26 @@ new class extends Component
     ]);
 
 
-        $supportTeam = SupportTeam::whereColumn('ticket_count' , '<' , 'max_ticket_capacity')
-        ->where('ticket_category_id' , '=' , $ticket->categoryId)
-        ->where('available', true)
-        ->lockForUpdate()
-        ->first();
-
-      if ($supportTeam) {
-                TicketAssignment::create([
-                    'teamId'   => $supportTeam->id,
-                    'ticketId' => $ticket->id,
-                ]);
-
-                $supportTeam->increment('ticket_count');
-
-                if ($supportTeam->ticket_count >= $supportTeam->max_ticket_capacity) {
-                    $supportTeam->update(['available' => false]);
-}
-                $supportTeam->notify(new NotifyTicket($ticket, 'created'));
-                }
-
+        $preferred = $this->preferredAgent !== '' ? (int) $this->preferredAgent : null;
+        $supportTeam = app(TicketAssigner::class)->assign($ticket, $preferred);
 
         $this->reset(['attachments']);
 
+        if ($supportTeam) {
+            $prefix = ($preferred && $supportTeam->id !== $preferred)
+                ? 'Your chosen agent is no longer available, so the ticket was assigned to '
+                : 'Your ticket has been assigned to ';
+
+            $assignedMessage = $prefix . $supportTeam->first_name . ' ' . $supportTeam->last_name
+                . '. You can chat with them from My Tickets.';
+        } else {
+            $assignedMessage = 'All support agents are currently at capacity. Your ticket is queued and will be assigned as soon as someone is free.';
+        }
+
         session()->flash('success', [
-    'Ticket created successfully!',
-    'Your ticket has been assigned to ' . $supportTeam->first_name . ' ' . $supportTeam->last_name . '.'
-]);
-        return redirect()->route('create-ticket');
+            'Ticket created successfully!',
+            $assignedMessage,
+        ]);
     });
         } catch (\Throwable $th) {
            foreach ($storedPaths as $path) {
@@ -118,6 +117,7 @@ new class extends Component
         throw $th;
         }
 
+        return redirect()->route('create-ticket');
     }
 
     public function render(){
@@ -128,7 +128,15 @@ new class extends Component
         $equipments = $this->category
             ? Equipment::where('categoryId', $this->category)->get()
             : collect();
+        $agents = $this->category
+            ? SupportTeam::where('ticket_category_id', $this->category)
+                ->where('available', true)
+                ->whereColumn('ticket_count', '<', 'max_ticket_capacity')
+                ->orderBy('first_name')
+                ->get()
+            : collect();
         return view("components.⚡raise-ticket-form" , [
+            'agents' => $agents,
             'departments' => $departments,
             'categories' => $categories,
             'equipments' => $equipments,
@@ -256,6 +264,31 @@ new class extends Component
                     <p class="text-xs text-error mt-1">{{ $message }}</p>
                 @enderror
             </div>
+        </div>
+
+        <!-- Preferred support agent -->
+        <div class="form-control w-full">
+            <label for="preferredAgent" class="label text-sm font-medium text-base-content mb-1">Support agent <span class="text-base-content/50 font-normal">(optional)</span></label>
+            <select
+                id="preferredAgent"
+                wire:model="preferredAgent"
+                @disabled(empty($category))
+                class="select select-bordered w-full text-sm focus:select-primary"
+            >
+                <option value="">Auto-assign (recommended)</option>
+                @foreach ($agents as $agent)
+                    <option value="{{ $agent->id }}">{{ $agent->first_name }} {{ $agent->last_name }} — {{ $agent->max_ticket_capacity - $agent->ticket_count }} slot(s) free</option>
+                @endforeach
+            </select>
+            <p class="text-xs text-base-content/60 mt-1">
+                @if (empty($category))
+                    Choose a category first to see who is available.
+                @elseif ($agents->isEmpty())
+                    No agents are free in this category right now; your ticket will be queued.
+                @else
+                    Your chosen agent will be notified and you can chat with them once the ticket is raised.
+                @endif
+            </p>
         </div>
 
         <!-- Desk -->
