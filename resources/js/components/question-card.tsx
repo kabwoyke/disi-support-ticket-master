@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { CategoryBadges } from "@/components/category-fields";
 import { Button } from "@/components/ui/button";
 import { Clock, Eye, MessageCircle, User, Check, X, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ interface QuestionCardProps {
     title?: string;
     description?: string;
     category?: string;
+    subcategory?: string;
     status?: string;
     attachment?: string;
     createdAt?: string;
@@ -31,7 +33,6 @@ interface QuestionCardProps {
 }
 
 export function QuestionCard({ question , onTap }: QuestionCardProps = {}) {
-  const category = question?.category || "ibml";
   const status = question?.status || "approved";
 
   const { solves } = usePage<PageProps>().props;
@@ -83,9 +84,7 @@ export function QuestionCard({ question , onTap }: QuestionCardProps = {}) {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center space-x-3 mb-3">
-              <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                {category.toUpperCase()}
-              </Badge>
+              <CategoryBadges category={question?.category} subcategory={question?.subcategory} />
 
               <Badge
                 className={

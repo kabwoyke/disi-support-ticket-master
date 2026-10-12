@@ -18,7 +18,7 @@ new class extends Component
 
         $creds = $this->validate();
 
-        if(Auth::attempt($creds)){
+        if(app(\App\Services\UnifiedAuth::class)->attempt($creds['email'], $creds['password'])){
             session()->regenerate();
 
             return redirect()->route("create-ticket");

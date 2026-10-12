@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { CategoryPicker } from "@/components/category-fields";
 import { useForm } from "@inertiajs/react";
 import {
   Dialog,
@@ -27,6 +28,7 @@ export function AdminPostModal({ open, onOpenChange }: AdminPostModalProps) {
     title: "",
     description: "",
     category: "" as string | null,
+    subcategory: "" as string | null,
     answer_text: "",
     question_attachment: null as File | null,
     answer_attachment: null as File | null,
@@ -99,20 +101,12 @@ const removeFile = (field: 'question_attachment' | 'answer_attachment', ref: Rea
                 {errors.description && <p className="text-xs text-red-500">{errors.description}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="category" className="text-sm font-semibold">Category *</Label>
-                <Select value={data.category} onValueChange={(val) => setData("category", val)}>
-                  <SelectTrigger data-testid="select-question-category">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ibml">IBML Scanners</SelectItem>
-                    <SelectItem value="softtrac">SoftTrac</SelectItem>
-                    <SelectItem value="omniscan">OmniScan</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.category && <p className="text-xs text-red-500">{errors.category}</p>}
-              </div>
+              <CategoryPicker
+                category={data.category}
+                subcategory={data.subcategory}
+                onChange={(next) => setData((d) => ({ ...d, ...next }))}
+                errors={errors}
+              />
 
               {/* Question Image Attachment */}
               <div className="space-y-2">

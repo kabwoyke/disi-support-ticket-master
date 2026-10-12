@@ -13,13 +13,14 @@ class SearchController extends Controller
     {
         $q = trim((string) $request->input('q', ''));
         $category = $request->input('category', 'all');
+        $subcategory = $request->input('subcategory', 'all');
         $solvedOnly = $request->boolean('solved');
 
         $payload = ['results' => [], 'total' => 0, 'suggestion' => null, 'terms' => []];
         $questions = collect();
 
         if ($q !== '') {
-            [$docs, $questions] = $this->corpus($request, $category, $solvedOnly);
+            [$docs, $questions] = $this->corpus($request, $category, $subcategory, $solvedOnly);
             $payload = $search->search($q, $docs, 30);
         }
 
@@ -29,6 +30,7 @@ class SearchController extends Controller
             return $r + [
                 'title' => $question->title,
                 'category' => $question->category,
+                'subcategory' => $question->subcategory,
                 'status' => $question->status,
                 'views' => $question->views,
                 'answer_count' => $question->answer->count(),
@@ -39,7 +41,7 @@ class SearchController extends Controller
 
         return Inertia::render('Search', [
             'query' => $q,
-            'filters' => ['category' => $category, 'solved' => $solvedOnly],
+            'filters' => ['category' => $category, 'subcategory' => $subcategory, 'solved' => $solvedOnly],
             'results' => $results,
             'total' => $payload['total'] ?? 0,
             'suggestion' => $payload['suggestion'],
@@ -75,7 +77,7 @@ class SearchController extends Controller
      *
      * @return array{0: array<int,array>, 1: \Illuminate\Support\Collection}
      */
-    private function corpus(Request $request, string $category, bool $solvedOnly): array
+    private function corpus(Request $request, string $category, string $subcategory, bool $solvedOnly): array
     {
         $user = $request->user('solves');
 
@@ -88,6 +90,7 @@ class SearchController extends Controller
                 ->where('status', 'approved')
                 ->orWhere('created_by', $user->id)))
             ->when($category !== 'all', fn ($q) => $q->where('category', $category))
+            ->when($subcategory !== 'all', fn ($q) => $q->where('subcategory', $subcategory))
             ->limit(3000)
             ->get()
             ->when($solvedOnly, fn ($c) => $c->filter(fn ($q) => $q->answer->isNotEmpty()))
@@ -98,6 +101,7 @@ class SearchController extends Controller
             'title' => $q->title,
             'description' => $q->description,
             'category' => $q->category,
+            'subcategory' => $q->subcategory,
             'views' => $q->views,
             'answers' => $q->answer->pluck('answer_text')->implode("\n"),
         ])->values()->all();

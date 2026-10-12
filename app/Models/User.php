@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'profile_picture'])]
+#[Fillable(['name', 'email', 'username', 'password', 'profile_picture'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -28,6 +28,16 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function supportProfile()
+    {
+        return $this->hasOne(SupportTeam::class);
+    }
+
+    public function solveProfile()
+    {
+        return $this->hasOne(SolveUser::class);
     }
 
     public function ticket(){

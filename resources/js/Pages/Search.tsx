@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CategoryBadges, CategoryFilter } from "@/components/category-fields";
 import "../../css/solves.css";
 
 interface Result {
   id: number;
   title: string;
   category: string;
+  subcategory?: string | null;
   status: string;
   views: number;
   answer_count: number;
@@ -26,7 +28,7 @@ interface Result {
 
 interface SearchProps {
   query: string;
-  filters: { category: string; solved: boolean };
+  filters: { category: string; subcategory: string; solved: boolean };
   results: Result[];
   total: number;
   suggestion: string | null;
@@ -66,16 +68,18 @@ export default function Search() {
   const { query, filters, results, total, suggestion } = usePage<SearchProps>().props;
   const [q, setQ] = useState(query);
   const [category, setCategory] = useState(filters.category);
+  const [subcategory, setSubcategory] = useState(filters.subcategory ?? "all");
   const [solved, setSolved] = useState(filters.solved);
   const first = useRef(true);
 
-  const run = (overrides: Partial<{ q: string; category: string; solved: boolean }> = {}) => {
-    const next = { q, category, solved, ...overrides };
+  const run = (overrides: Partial<{ q: string; category: string; subcategory: string; solved: boolean }> = {}) => {
+    const next = { q, category, subcategory, solved, ...overrides };
     router.get(
       "/disi-solves/search",
       {
         ...(next.q.trim() ? { q: next.q.trim() } : {}),
         ...(next.category !== "all" ? { category: next.category } : {}),
+        ...(next.subcategory !== "all" ? { subcategory: next.subcategory } : {}),
         ...(next.solved ? { solved: 1 } : {}),
       },
       { preserveState: true, preserveScroll: true, replace: true, only: ["query", "filters", "results", "total", "suggestion", "terms"] }
@@ -128,27 +132,15 @@ export default function Search() {
               </div>
 
               <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-foreground">Category:</label>
-                  <Select
-                    value={category}
-                    onValueChange={(v) => {
-                      const next = v ?? "all";
-                      setCategory(next);
-                      run({ category: next });
-                    }}
-                  >
-                    <SelectTrigger className="w-44">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
-                      <SelectItem value="ibml">IBML Scanners</SelectItem>
-                      <SelectItem value="softtrac">SoftTrac</SelectItem>
-                      <SelectItem value="omniscan">OmniScan</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <CategoryFilter
+                  category={category}
+                  subcategory={subcategory}
+                  onChange={(next) => {
+                    setCategory(next.category);
+                    setSubcategory(next.subcategory);
+                    run(next);
+                  }}
+                />
 
                 <label className="flex cursor-pointer items-center space-x-2 text-sm text-foreground">
                   <input
@@ -215,9 +207,7 @@ export default function Search() {
                   <Card className="transition-shadow hover:shadow-md">
                     <CardContent className="p-5">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                          {r.category.toUpperCase()}
-                        </Badge>
+                        <CategoryBadges category={r.category} subcategory={r.subcategory} />
                         {r.answer_count > 0 && (
                           <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300">
                             <CheckCircle2 className="mr-1 h-3 w-3" />

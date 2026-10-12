@@ -35,30 +35,33 @@ Route::get("/" , function(Request $request){
 //         return view('welcome');
 //     });
 
-Route::livewire("/help" , "pages::help-page")->name('help-page');
-
+// ---- Tickets module (guard: web) ----
 Route::livewire("/auth/login" , "pages::auth.login")->name('login');
 Route::post("/auth/logout", [AuthController::class , 'logout'] )->name('logout');
-Route::livewire("/tickets/create" , "pages::tickets.create")->name("create-ticket")->middleware('auth');
-Route::livewire("/tickets/get-tickets" , "pages::view-tickets")->name("get-tickets");
-Route::livewire("/users/chat/v1" , "pages::users.chat")->name("user-chat")->middleware('auth');
-Route::livewire("/profile" , "pages::profile")->name("profile")->middleware('auth');
 
-// support
-Route::livewire("/support/dashboard" , "pages::ict.dashboard")->name("ict-dashboard")->middleware("auth:support");
-Route::livewire("/support/manage-desk" , 'pages::ict.manage-desk');
-Route::livewire("/support/manage-assets" , "pages::ict.assets")->name('manage-asset');
-Route::livewire("/support/manage-desks" , "pages::ict.features.manage-desk")->name('manage-desk');
-Route::livewire("/support/notifications/view" , "pages::ict.features.view-notification")->name('view-notification');
-Route::livewire("/support/chat/v1" , "pages::ict.features.chat")->name("support-chat")->middleware("auth:support");
+Route::middleware('auth')->group(function () {
+    Route::livewire("/help" , "pages::help-page")->name('help-page');
+    Route::livewire("/tickets/create" , "pages::tickets.create")->name("create-ticket");
+    Route::livewire("/tickets/get-tickets" , "pages::view-tickets")->name("get-tickets");
+    Route::livewire("/users/chat/v1" , "pages::users.chat")->name("user-chat");
+    Route::livewire("/profile" , "pages::profile")->name("profile");
+});
+
+// ---- Support module (guard: support) ----
 Route::livewire("/support/auth/login" , "pages::ict.auth.login")->name('ict-login');
-Route::livewire("/support/my-tickets" , "pages::ict.features.my-tickets")->name("my-tickets");
-Route::livewire("/support/system/health" , "pages::ict.settings.health")->name('system-health');
-Route::livewire("/support/profile" , "pages::ict.profile")->name('support-profile')->middleware("auth:support");
 Route::post("/support/auth/logout" , [AuthController::class , 'support_logout'])->name('support-logout');
 
-
-
+Route::middleware('auth:support')->group(function () {
+    Route::livewire("/support/dashboard" , "pages::ict.dashboard")->name("ict-dashboard");
+    Route::livewire("/support/manage-desk" , 'pages::ict.manage-desk');
+    Route::livewire("/support/manage-assets" , "pages::ict.assets")->name('manage-asset');
+    Route::livewire("/support/manage-desks" , "pages::ict.features.manage-desk")->name('manage-desk');
+    Route::livewire("/support/notifications/view" , "pages::ict.features.view-notification")->name('view-notification');
+    Route::livewire("/support/chat/v1" , "pages::ict.features.chat")->name("support-chat");
+    Route::livewire("/support/my-tickets" , "pages::ict.features.my-tickets")->name("my-tickets");
+    Route::livewire("/support/system/health" , "pages::ict.settings.health")->name('system-health');
+    Route::livewire("/support/profile" , "pages::ict.profile")->name('support-profile');
+});
 
 // DISI-SOLVES
 Route::get("/disi-solves/auth/login" , [SolveAuthController::class , 'render_login_page'] );
@@ -102,6 +105,10 @@ Route::get("/disi-solves/dashboard", function (Request $request) {
         $query->where('category', $request->input('category'));
     }
 
+    if ($request->filled('subcategory') && $request->input('subcategory') !== 'all') {
+        $query->where('subcategory', $request->input('subcategory'));
+    }
+
     // 4. Sorting Logic
     switch ($request->input('sort', 'recent')) {
         case 'views':
@@ -121,6 +128,7 @@ Route::get("/disi-solves/dashboard", function (Request $request) {
         'filters' => [
             'search' => $request->input('search', ''),
             'category' => $request->input('category', 'all'),
+            'subcategory' => $request->input('subcategory', 'all'),
             'status' => $request->input('status', $isAdmin ? 'all' : 'approved'),
             'sort' => $request->input('sort', 'recent'),
         ],

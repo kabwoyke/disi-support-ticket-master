@@ -8,10 +8,20 @@ use Illuminate\Notifications\Notifiable;
 
 class SupportTeam extends Authenticatable
 {
-    use Notifiable, \App\Models\Concerns\HasAvatar;
+    use Notifiable, \App\Models\Concerns\HasAvatar, \App\Models\Concerns\SyncsUnifiedUser;
+
+    protected function unifiedIdentity(): array
+    {
+        return [
+            'name' => trim($this->first_name . ' ' . $this->last_name),
+            'email' => $this->email,
+            'username' => null,
+        ];
+    }
     //
 
     protected $fillable = [
+        'user_id',
         'first_name',
         'last_name',
         'phone_number',

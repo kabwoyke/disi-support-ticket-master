@@ -22,13 +22,14 @@ class ActivityController extends Controller
                 'question_id' => $q->id,
                 'title' => $q->title,
                 'category' => $q->category,
+                'subcategory' => $q->subcategory,
                 'status' => $q->status,
                 'views' => $q->views,
                 'answer_count' => $q->answer_count,
                 'created_at' => $q->created_at?->toIso8601String(),
             ]);
 
-        $answers = Answer::with('question:id,title,category')
+        $answers = Answer::with('question:id,title,category,subcategory')
             ->where('created_by', $userId)
             ->get()
             ->map(fn ($a) => [
@@ -37,6 +38,7 @@ class ActivityController extends Controller
                 'question_id' => $a->question_id,
                 'title' => $a->question?->title ?? 'Deleted question',
                 'category' => $a->question?->category,
+                'subcategory' => $a->question?->subcategory,
                 'excerpt' => str($a->answer_text)->limit(160)->toString(),
                 'status' => $a->status,
                 'created_at' => $a->created_at?->toIso8601String(),

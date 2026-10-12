@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\UnifiedAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -37,10 +38,19 @@ class SolveAuthController extends Controller
         }
 
         // Attempt to authenticate using the custom guard and username field
-        if (Auth::guard('solves')->attempt([
-            'username' => $credentials['username'],
-            'password' => $credentials['password'],
-        ], $request->boolean('remember'))) {
+        $auth = app(UnifiedAuth::class);
+        $user = $auth->attempt($credentials['username'], $credentials['password'], $request->boolean('remember'));
+
+        if ($user && ! Auth::guard('solves')->check()) {
+            // Valid account without a DISI-Solves profile.
+            $auth->signOut();
+
+            return back()->withErrors([
+                'username' => 'This account does not have DISI-Solves access.',
+            ])->onlyInput('username');
+        }
+
+        if ($user) {
 
             RateLimiter::clear($throttleKey);
             $request->session()->regenerate();
@@ -64,16 +74,9 @@ class SolveAuthController extends Controller
 
 public function logout(Request $request)
 {
-    // Log out using the support guard
-    Auth::guard('solves')->logout();
+    // Global logout: clears every module's guard.
+    app(UnifiedAuth::class)->signOut();
 
-    // Invalidate the current session
-    $request->session()->invalidate();
-
-    // Regenerate the CSRF token for security
-    $request->session()->regenerateToken();
-
-    // Redirect to the login page or home
     return redirect()->route('solves-login')->with('success', 'You have been signed out.');
 }
 

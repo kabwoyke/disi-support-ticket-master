@@ -6,6 +6,7 @@ use Inertia\Inertia;
 use App\Models\Answer;
 use App\Models\Question;
 use App\Models\SolveUser;
+use App\Support\SolvesCategories;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,7 @@ class AdminController extends Controller
             $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
-            'category' => 'required|in:ibml,softtrac,omniscan',
+            ...SolvesCategories::rules(),
             'answer_text' => 'required|string',
             'question_attachment' => 'nullable|image|max:5120',
             'answer_attachment' => 'nullable|image|max:5120',
@@ -44,6 +45,7 @@ class AdminController extends Controller
                 'title' => $validated['title'],
                 'description' => $validated['description'],
                 'category' => $validated['category'],
+                'subcategory' => $validated['subcategory'],
                 'priority' => 'medium',
                 'created_by' => Auth::id(),
                 'status' => 'approved',

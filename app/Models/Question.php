@@ -17,6 +17,7 @@ class Question extends Model
         'title',
         'description',
         'category',
+        'subcategory',
         'priority',
         'created_by',
         'status',

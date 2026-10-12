@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { CategoryFilter } from "@/components/category-fields";
 import { Sidebar } from "@/components/sidebar";
 import { QuestionCard } from "../components/question-card";
 import { RaiseIssueModal } from "../components/raise-issue-modal";
@@ -25,7 +26,8 @@ export interface QuestionData {
   id: string;
   title: string;
   description: string;
-  category: 'ibml' | 'softtrac' | 'omniscan';
+  category: string;
+  subcategory?: string | null;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   created_by: string;
   created_at: string;
@@ -45,6 +47,7 @@ export interface PageProps {
   filters?: {
     search?: string;
     category?: string;
+    subcategory?: string;
     status?: string;
     sort?: string;
   };
@@ -69,6 +72,7 @@ export default function Dashboard() {
   // Form Filters State
  const [search, setSearch] = useState(filters?.search || "");
   const [category, setCategory] = useState(filters?.category || "all");
+  const [subcategory, setSubcategory] = useState(filters?.subcategory || "all");
   const [status, setStatus] = useState(filters?.status || "all");
   const [sort, setSort] = useState(filters?.sort || "recent");
 
@@ -80,6 +84,7 @@ export default function Dashboard() {
     const currentParams = {
       search,
       category,
+      subcategory,
       status,
       sort,
       ...overrides,
@@ -89,6 +94,7 @@ export default function Dashboard() {
 
     if (currentParams.search.trim()) queryParams.search = currentParams.search.trim();
     if (currentParams.category && currentParams.category !== "all") queryParams.category = currentParams.category;
+    if (currentParams.subcategory && currentParams.subcategory !== "all") queryParams.subcategory = currentParams.subcategory;
     if (currentParams.status && currentParams.status !== "all") queryParams.status = currentParams.status;
     if (currentParams.sort && currentParams.sort !== "recent") queryParams.sort = currentParams.sort;
 
@@ -114,10 +120,10 @@ export default function Dashboard() {
   }, [search]);
 
   // Dropdown Handlers
-  const handleCategoryChange = (val: string | null) => {
-    const nextCategory = val ?? "all";
-    setCategory(nextCategory);
-    applyFilters({ category: nextCategory });
+  const handleCategoryChange = (next: { category: string; subcategory: string }) => {
+    setCategory(next.category);
+    setSubcategory(next.subcategory);
+    applyFilters(next);
   };
 
   const handleStatusChange = (val: string | null) => {
@@ -237,20 +243,7 @@ export default function Dashboard() {
                 <h3 className="text-lg font-semibold text-foreground">Filter Questions</h3>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center space-x-2">
-                    <label className="text-sm font-medium text-foreground">Category:</label>
-                    <Select value={category} onValueChange={handleCategoryChange}>
-                      <SelectTrigger className="w-40">
-                        <SelectValue placeholder="All Categories" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        <SelectItem value="ibml">IBML Scanners</SelectItem>
-                        <SelectItem value="softtrac">SoftTrac</SelectItem>
-                        <SelectItem value="omniscan">OmniScan</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <CategoryFilter category={category} subcategory={subcategory} onChange={handleCategoryChange} />
 
                   <div className="flex items-center space-x-2">
                     <label className="text-sm font-medium text-foreground">Status:</label>
@@ -323,6 +316,7 @@ export default function Dashboard() {
                       title: question.title,
                       description: question.description,
                       category: question.category,
+                      subcategory: question.subcategory ?? undefined,
                       status: question.status,
                       createdAt: question.created_at,
                       views: question.views,

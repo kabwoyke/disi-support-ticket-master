@@ -8,7 +8,16 @@ use Illuminate\Notifications\Notifiable;
 
 class SolveUser extends Authenticatable
 {
-    use HasFactory , Notifiable, \App\Models\Concerns\HasAvatar;
+    use HasFactory , Notifiable, \App\Models\Concerns\HasAvatar, \App\Models\Concerns\SyncsUnifiedUser;
+
+    protected function unifiedIdentity(): array
+    {
+        return [
+            'name' => trim(($this->first_name ?? '') . ' ' . ($this->last_name ?? '')) ?: $this->username,
+            'email' => $this->username . '@solves.local',
+            'username' => $this->username,
+        ];
+    }
     protected $connection = 'mysql_solves';
     protected $table = 'solve_users';
     //
@@ -16,6 +25,7 @@ class SolveUser extends Authenticatable
 
     protected $fillable = [
         'id',
+        'user_id',
         'username',
         'password',
         'role',

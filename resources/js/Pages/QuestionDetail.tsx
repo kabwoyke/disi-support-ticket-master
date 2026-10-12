@@ -1,4 +1,5 @@
 import { JSX, useRef } from "react";
+import { CategoryBadges } from "@/components/category-fields";
 import { Sidebar } from "@/components/sidebar";
 import { RaiseIssueModal } from "@/components/raise-issue-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ export interface Question {
   title: string;
   description: string;
   category: string;
+  subcategory?: string | null;
   priority?: string;
   status: "pending" | "approved" | "rejected";
   views: number;
@@ -169,9 +171,7 @@ export default function QuestionDetail() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-3">
-                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                      {q.question.category}
-                    </Badge>
+                    <CategoryBadges category={q.question.category} subcategory={q.question.subcategory} />
                     <Badge className={statusStyles[q.question.status]}>
                       {statusIcons[q.question.status]}
                       {q.question.status}

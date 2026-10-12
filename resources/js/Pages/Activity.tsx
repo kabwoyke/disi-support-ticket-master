@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CategoryBadges } from "@/components/category-fields";
 import { Link, router, usePage } from "@inertiajs/react";
 import moment from "moment";
 import { History, MessageSquare, HelpCircle, Clock, Check, X, Trash2 } from "lucide-react";
@@ -16,6 +17,7 @@ interface ActivityItem {
   question_id: number;
   title: string;
   category?: string | null;
+  subcategory?: string | null;
   status: Status;
   excerpt?: string;
   views?: number;
@@ -133,7 +135,7 @@ export default function Activity() {
                             {statusIcon(item.status)}
                             {item.status}
                           </Badge>
-                          {item.category && <Badge variant="secondary">{item.category.toUpperCase()}</Badge>}
+                          <CategoryBadges category={item.category} subcategory={item.subcategory} />
                         </div>
 
                         <Link href={`/disi-solves/${item.question_id}/details`} className="mb-1 block font-medium text-foreground hover:text-primary">

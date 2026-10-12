@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Question;
+use App\Support\SolvesCategories;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ class QuestionController extends Controller
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'category' => 'required|in:ibml,softtrac,omniscan',
+            ...SolvesCategories::rules(),
             'description' => 'required|string',
             // 'created_by' => 'numeric|required',
             'attachment' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
@@ -36,6 +37,7 @@ class QuestionController extends Controller
         Question::create([
             'title' => $validated['title'],
             'category' => $validated['category'],
+            'subcategory' => $validated['subcategory'],
             'description' => $validated['description'],
             'attachment' => $filePath,
             'created_by' => auth('solves')->id(),

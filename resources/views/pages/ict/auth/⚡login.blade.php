@@ -17,15 +17,22 @@ new class extends Component
     {
         $this->validate();
 
-        if (auth()->guard('support')->attempt(
-        ['email' => $this->email, 'password' => $this->password],
-        $this->remember
-    )) {
-        request()->session()->regenerate();
+        $auth = app(\App\Services\UnifiedAuth::class);
+        $user = $auth->attempt($this->email, $this->password, $this->remember);
 
-        $this->redirectIntended(route('ict-dashboard'));
-        return;
-    }
+        if ($user && auth('support')->check()) {
+            request()->session()->regenerate();
+
+            $this->redirectIntended(route('ict-dashboard'));
+            return;
+        }
+
+        if ($user) {
+            // Valid account without a support profile: don't leave a half-open session behind.
+            $auth->signOut();
+            $this->addError('email', 'This account does not have support team access.');
+            return;
+        }
 
         $this->addError('email', 'The provided credentials do not match our records.');
     }

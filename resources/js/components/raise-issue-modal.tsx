@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Send, Upload, X, Loader2 } from "lucide-react";
+import { CategoryPicker } from "@/components/category-fields";
 import "../../css/solves.css";
 import { PageProps } from "@/Pages/Dashboard";
 
@@ -32,6 +33,7 @@ export function RaiseIssueModal({ open, onOpenChange }: RaiseIssueModalProps) {
   const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
     title: "",
     category: "" as string | null,
+    subcategory: "" as string | null,
     description: "",
     created_by:user?.id,
     attachment: null as File | null,
@@ -150,23 +152,12 @@ export function RaiseIssueModal({ open, onOpenChange }: RaiseIssueModalProps) {
           </div>
 
           {/* Category */}
-          <div className="space-y-2">
-            <Label htmlFor="category" className="text-sm font-semibold">Category *</Label>
-            <Select
-              value={data.category || ""}
-              onValueChange={(value) => setData("category", value)}
-            >
-              <SelectTrigger className="h-11">
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ibml">IBML Scanners</SelectItem>
-                <SelectItem value="softtrac">SoftTrac</SelectItem>
-                <SelectItem value="omniscan">OmniScan</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.category && <p className="text-sm text-red-500">{errors.category}</p>}
-          </div>
+          <CategoryPicker
+            category={data.category}
+            subcategory={data.subcategory}
+            onChange={(next) => setData((d) => ({ ...d, ...next }))}
+            errors={errors}
+          />
 
           {/* Description */}
           <div className="space-y-2">
