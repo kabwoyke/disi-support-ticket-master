@@ -111,7 +111,7 @@ export function QuestionCard({ question , onTap }: QuestionCardProps = {}) {
             {question?.attachment && (
               <div className="mb-4">
                 <img
-                  src={question.attachment.startsWith("http") ? question.attachment : `/storage/${question.attachment}`}
+                  src={question.attachment.startsWith("http") ? question.attachment : `/files/${question.attachment}`}
                   alt="Question attachment"
                   className="max-w-full h-auto rounded-lg border"
                   style={{ maxHeight: "200px" }}

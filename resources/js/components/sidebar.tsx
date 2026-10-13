@@ -8,6 +8,7 @@ import {
   Search,
   Plus,
   Users,
+  Tags,
   History,
   UserCircle,
   Ticket,
@@ -141,6 +142,20 @@ export function Sidebar() {
         >
           <Users className="mr-3 h-4 w-4" />
           User Management
+        </Button>
+        </Link>
+}
+
+    {
+        user?.role === "admin" &&
+        <Link href={"/disi-solves/admin/categories"} className="block">
+        <Button
+          variant="ghost"
+          className={navButtonClass("/disi-solves/admin/categories")}
+          data-testid="button-category-management"
+        >
+          <Tags className="mr-3 h-4 w-4" />
+          Categories
         </Button>
         </Link>
 }

@@ -3,7 +3,6 @@
 namespace App\Models\Concerns;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Support\Facades\Storage;
 
 trait HasAvatar
 {
@@ -28,7 +27,7 @@ trait HasAvatar
             if ($path) {
                 return str_starts_with($path, 'http')
                     ? $path
-                    : Storage::disk('public')->url($path);
+                    : '/files/'.ltrim($path, '/');
             }
 
             return 'https://ui-avatars.com/api/?background=random&name=' . urlencode($this->display_name);

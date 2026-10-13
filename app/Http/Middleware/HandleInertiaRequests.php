@@ -58,11 +58,7 @@ class HandleInertiaRequests extends Middleware
                     // Add any other user fields your React frontend needs
                 ] : null,
             ],
-            'categories' => fn () => collect(config('solves.categories'))->map(fn ($c, $slug) => [
-                'value' => $slug,
-                'label' => $c['label'],
-                'subcategories' => collect($c['subcategories'])->map(fn ($label, $value) => compact('value', 'label'))->values(),
-            ])->values(),
+            'categories' => fn () => \App\Support\SolvesCategories::tree(),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

@@ -208,7 +208,7 @@ export default function QuestionDetail() {
     src={
       q.question.attachment.startsWith("http")
         ? q.question.attachment
-        : `/storage/${q.question.attachment}`
+        : `/files/${q.question.attachment}`
     }
     alt="Question attachment"
     className="max-w-full h-auto rounded-lg border max-h-[300px]"
@@ -309,7 +309,7 @@ export default function QuestionDetail() {
                               src={
                                 answer.attachment.startsWith("http")
                                   ? answer.attachment
-                                  : `/storage/${answer.attachment}`
+                                  : `/files/${answer.attachment}`
                               }
                               alt="Answer attachment"
                               className="max-w-full h-auto rounded-lg border max-h-[300px]"

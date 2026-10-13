@@ -51,7 +51,8 @@ class AdminController extends Controller
                 'status' => 'approved',
                 'is_final' => 1,
                 'attachment' => $questionPath,
-
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
             // Create Answer Record

@@ -16,9 +16,19 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\SearchController;
 use App\Http\Middleware\SolvesAdmin;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\AnswerController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\SolveAuthController;
+
+// Serves uploaded files straight from the public disk, so images work even where the public/storage link is broken.
+Route::get('/files/{path}', function (string $path) {
+    abort_if(str_contains($path, '..'), 404);
+    $disk = \Illuminate\Support\Facades\Storage::disk('public');
+    abort_unless($disk->exists($path), 404);
+
+    return $disk->response($path);
+})->where('path', '.*')->name('public-file');
 
 Route::get("/" , function(Request $request){
     return view('welcome');
@@ -167,4 +177,12 @@ Route::middleware(['auth:solves', SolvesAdmin::class])->group(function () {
     Route::post('/disi-solves/admin/add/users', [AdminController::class, 'store'])->name('solves.users.store');
     Route::put('/disi-solves/admin/{id}', [AdminController::class, 'update'])->whereNumber('id')->name('solves.users.update');
     Route::delete('/disi-solves/admin/users/{id}', [AdminController::class, 'destroy'])->name('solves.users.destroy');
+
+    Route::get('/disi-solves/admin/categories', [CategoryController::class, 'index'])->name('solves.categories.index');
+    Route::post('/disi-solves/admin/categories', [CategoryController::class, 'store'])->name('solves.categories.store');
+    Route::put('/disi-solves/admin/categories/{id}', [CategoryController::class, 'update'])->name('solves.categories.update');
+    Route::delete('/disi-solves/admin/categories/{id}', [CategoryController::class, 'destroy'])->name('solves.categories.destroy');
+    Route::post('/disi-solves/admin/categories/{id}/subcategories', [CategoryController::class, 'storeSub'])->name('solves.subcategories.store');
+    Route::put('/disi-solves/admin/subcategories/{id}', [CategoryController::class, 'updateSub'])->name('solves.subcategories.update');
+    Route::delete('/disi-solves/admin/subcategories/{id}', [CategoryController::class, 'destroySub'])->name('solves.subcategories.destroy');
 });
